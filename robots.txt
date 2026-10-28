@@ -1,3 +1,4 @@
+# Разрешено всем, включая поисковые и ИИ-краулеры (Googlebot, Bingbot, YandexBot, OAI-SearchBot, PerplexityBot, ClaudeBot и др.)
 User-agent: *
 Allow: /
 
