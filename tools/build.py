@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Генератор статического сайта yogavam.com.
-Запуск: python3 build.py  -> пишет готовый сайт в ./site/
-Всё, что надо менять руками, — в блоке НАСТРОЙКИ ниже.
-"""
-import json, os, shutil, html, datetime, urllib.parse
+"""Генератор yogavam.com. Запуск: python tools/build.py
+Пишет страницы в корень репозитория (корень репозитория = корень сайта).
+Руками меняются: блок НАСТРОЙКИ и тексты ниже. HTML не править."""
+import json, os, html, datetime, urllib.parse, hashlib, glob
+
+e = html.escape
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = ROOT
+IMG = os.path.join(ROOT, "assets", "img")
+CERT_DIR = os.path.join(IMG, "certificates")
+ORIG = os.path.join(ROOT, "_originals")
 
 # ===================== НАСТРОЙКИ =====================
 DOMAIN = "https://yogavam.com"
@@ -12,121 +18,293 @@ AUTHOR = "Наталья Умнова"
 AUTHOR_FIRST = "Наталья"
 WA_NUMBER = "995599018912"
 YT_URL = "https://www.youtube.com/@yogaumnova"
-PHOTO = "/assets/img/natalya-umnova.jpg"    # портрет 4:5, ~900×1125, до 250 КБ
-PHOTO_W, PHOTO_H = 941, 882
-OG_IMAGE = "/assets/img/og.jpg"             # 1200×630
-GOOGLE_VERIFY = ""                          # содержимое google-site-verification, если не через DNS
-YANDEX_VERIFY = ""                          # содержимое yandex-verification
-# Сертификаты: файлы класть в /assets/img/certificates/. Пока список пуст — галерея не выводится.
+PHOTO_FILE = "natalya-umnova.jpg"     # исходное фото: assets/img/natalya-umnova.jpg (вертикальное 4:5, от 1200×1500)
+PHOTO_FOCUS = "50% 30%"               # что держать в кадре при обрезке: x y (лицо обычно 25–35% сверху)
+OG_IMAGE = "/assets/img/og.jpg"
+GOOGLE_VERIFY = ""
+YANDEX_VERIFY = ""
+
+# Стоимость одного индивидуального занятия
+PRICES = {
+    "online": {"USD": 40, "RUB": 3500, "GEL": 70},
+    "batumi": {"USD": 50, "RUB": 4000, "GEL": 100},
+}
+CUR = {"USD": "$", "RUB": "₽", "GEL": "₾"}
+
 ORG = "International Open Yoga Foundation Europe"
+ORG2 = "Академия йоги и йогатерапии Татьяны Дудиной (Yoga Dudina)"
+# Сертификаты. slug -> файлы assets/img/certificates/<slug>.jpg и <slug>-thumb.jpg.
+# Если рядом лежит скан _originals/<src>, оба файла создаются автоматически.
 CERTS = [
-    {"file": "open-yoga-instructor-2017.jpg", "title": "Курс инструкторов Open Yoga (2014–2017), 816 часов", "alt": "Open Yoga Instructor's Course", "org": ORG, "year": "2017"},
-    {"file": "open-yoga-teacher-2018.jpg", "title": "Преподаватель Open Yoga (2014–2018)", "alt": "Open Yoga Teacher", "org": ORG, "year": "2018"},
-    {"file": "open-yoga-master-2021.jpg", "title": "Мастер Open Yoga (2014–2021)", "alt": "Open Yoga Master", "org": ORG, "year": "2021"},
+    {"slug": "open-yoga-master-2021", "src": "Docs393.jpg", "group": "Йога",
+     "title": "Мастер Open Yoga", "short": "Мастер Open Yoga", "org": ORG, "period": "2014–2021", "issued": "2021-11-13",
+     "desc": "Высшая квалификация программы Open Yoga. Даёт право вести практические занятия, воркшопы, ретриты и теоретические уроки."},
+    {"slug": "open-yoga-teacher-2018", "src": "Docs395.jpg", "group": "Йога",
+     "title": "Преподаватель Open Yoga", "short": "Преподаватель Open Yoga", "org": ORG, "period": "2014–2018", "issued": "2018-11-17",
+     "desc": "Квалификация преподавателя Open Yoga. Даёт право вести практические занятия, воркшопы, ретриты и теоретические уроки."},
+    {"slug": "open-yoga-instructor-2017", "src": "Docs394.jpg", "group": "Йога",
+     "title": "Курс инструкторов Open Yoga", "short": "Курс инструкторов, 816 часов", "org": ORG, "period": "2014–2017", "issued": "2017-11-04",
+     "desc": "Первая ступень обучения: 447 часов теоретических занятий и 369 часов практики. Даёт право вести практические и теоретические занятия Open Yoga."},
+    {"slug": "tbs-2024", "src": "ТБС.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Тазобедренные суставы", "short": "Тазобедренные суставы", "org": ORG2, "period": "2024", "hours": 26, "issued": "2024-08-23",
+     "desc": "Курс «Тазобедренные суставы» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "pelvic-floor-2024", "src": "Тазовое дно.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Тазовое дно", "short": "Тазовое дно", "org": ORG2, "period": "2024", "hours": 54, "issued": "2024-05-24",
+     "desc": "Курс «Тазовое дно» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "breathing-2024", "src": "Дыхание.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Дыхание и дыхательные техники", "short": "Дыхание и дыхательные техники", "org": ORG2, "period": "2024", "hours": 36, "issued": "2024-02-02",
+     "desc": "Курс «Дыхание и дыхательные техники» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "feet-2024", "src": "Стопы.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Стопы", "short": "Стопы", "org": ORG2, "period": "2024", "hours": 59, "issued": "2024-02-02",
+     "desc": "Курс «Стопы» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "neck-2023", "src": "Шейный отдел.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Шейный отдел", "short": "Шейный отдел", "org": ORG2, "period": "2023", "hours": 58, "issued": "2023-10-31",
+     "desc": "Курс «Шейный отдел» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "pelvis-si-2023", "src": "Таз и КПС.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Таз и крестцово-подвздошный сустав", "short": "Таз и крестцово-подвздошный сустав", "org": ORG2, "period": "2023", "hours": 50, "issued": "2023-07-18",
+     "desc": "Курс «Таз и крестцово-подвздошный сустав» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "shoulder-arm-2023", "src": "Плечо запястье локоть.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Плечо, запястье, локоть", "short": "Плечо, запястье, локоть", "org": ORG2, "period": "2023", "hours": 41, "issued": "2023-04-14",
+     "desc": "Курс «Плечо, запястье, локоть» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "posture-thoracic-2022", "src": "Осанка и грудной отдел.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Осанка и грудной отдел", "short": "Осанка и грудной отдел", "org": ORG2, "period": "2022", "hours": 46, "issued": "2022-10-31",
+     "desc": "Курс «Осанка и грудной отдел» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
+    {"slug": "lumbar-2022", "src": "Поясница.jpg", "group": "Йогатерапия и биомеханика",
+     "title": "Поясница", "short": "Поясница", "org": ORG2, "period": "2022", "hours": 84, "issued": "2022-04-05",
+     "desc": "Курс «Поясница» из цикла «Йогатерапия и биомеханика» для преподавателей йоги и йогатерапии, без сдачи экзамена."},
 ]
 TODAY = datetime.date.today().isoformat()
-OUT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # корень репозитория
 # =====================================================
 
 WA_TEXT = f"Здравствуйте, {AUTHOR_FIRST}! Хочу узнать о занятиях."
 WA_URL = f"https://wa.me/{WA_NUMBER}?text=" + urllib.parse.quote(WA_TEXT)
-PLACEHOLDER = lambda s: "TODO" in s
-e = html.escape
-
-pages = []  # (url, lastmod, [images])
-
-
-
-NAV = [("/about/", "Обо мне"), ("/online/", "Онлайн-занятия"), ("/batumi/", "Батуми"),
-       ("/blog/", "Статьи"), ("/contacts/", "Контакты")]
+NB = " "
+RU_MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
 
 person_id = DOMAIN + "/#person"
 website_id = DOMAIN + "/#website"
+abs_url = lambda p: DOMAIN + p
 
-def abs_url(p): return DOMAIN + p
 
-PERSON = {
-    "@type": "Person", "@id": person_id, "name": AUTHOR,
-    "givenName": "Наталья", "familyName": "Умнова",
-    "jobTitle": "Инструктор йоги и йогатерапии",
-    "description": "Инструктор йоги и йогатерапии, специалист по движению и методу Фельденкрайза. Более 10 лет преподаёт йогу и йогатерапию, ведёт индивидуальные занятия онлайн и в Батуми, помогает будущим мамам подготовиться к родам и восстановиться после них.",
-    "url": abs_url("/about/"),
-    "image": {"@type": "ImageObject", "url": abs_url(PHOTO), "width": PHOTO_W, "height": PHOTO_H},
-    "knowsAbout": ["йогатерапия", "метод Фельденкрайза", "миофасциальные упражнения", "соматические практики",
-                   "работа с нервной системой", "йога для беременных", "восстановление после родов",
-                   "биомеханика движения", "осанка"],
-    "knowsLanguage": "ru",
-    "workLocation": {"@type": "City", "name": "Батуми"},
-}
-if not PLACEHOLDER(YT_URL):
-    PERSON["sameAs"] = [YT_URL]
-if CERTS:
-    PERSON["hasCredential"] = [{
-        "@type": "EducationalOccupationalCredential", "name": c["title"], "credentialCategory": "certificate",
-        **({"recognizedBy": {"@type": "Organization", "name": c["org"]}} if c.get("org") else {}),
-        **({"dateCreated": c["year"]} if c.get("year") else {}),
-        "image": abs_url("/assets/img/certificates/" + c["file"])} for c in CERTS]
+# ---------- подготовка картинок ----------
+PHOTO_W = PHOTO_H = 0
+PHOTO_WIDTHS = []
 
-WEBSITE = {"@type": "WebSite", "@id": website_id, "name": BRAND, "alternateName": "Йогатерапия с Натальей Умновой",
-           "url": DOMAIN + "/", "inLanguage": "ru", "publisher": {"@id": person_id}}
+def prepare_images():
+    global PHOTO_W, PHOTO_H, PHOTO_WIDTHS
+    try:
+        from PIL import Image
+    except ImportError:
+        print("ВНИМАНИЕ: нет pillow (pip install pillow), картинки не обработаны")
+        Image = None
+    src = os.path.join(IMG, PHOTO_FILE)
+    if os.path.exists(src) and Image:
+        im = Image.open(src).convert("RGB")
+        PHOTO_W, PHOTO_H = im.size
+        for old in glob.glob(os.path.join(IMG, "photo-*.webp")): os.remove(old)
+        PHOTO_WIDTHS = [w for w in (640, 1000, 1400) if w < PHOTO_W] + [PHOTO_W]
+        for w in PHOTO_WIDTHS:
+            h = round(im.height * w / im.width)
+            im.resize((w, h), Image.LANCZOS).save(os.path.join(IMG, f"photo-{w}.webp"), "WEBP", quality=82, method=6)
+    elif os.path.exists(src):
+        from struct import unpack
+        PHOTO_W, PHOTO_H = 900, 1125
+    for c in CERTS:
+        full = os.path.join(CERT_DIR, c["slug"] + ".jpg")
+        thumb = os.path.join(CERT_DIR, c["slug"] + "-thumb.jpg")
+        scan = os.path.join(ORIG, c.get("src", "")) if c.get("src") else ""
+        if Image and scan and os.path.exists(scan):
+            if not (os.path.exists(thumb) and os.path.getmtime(thumb) >= os.path.getmtime(scan)):
+                im = Image.open(scan).convert("RGB")
+                os.makedirs(CERT_DIR, exist_ok=True)
+                for w, p, q in ((1400, full, 80), (600, thumb, 78)):
+                    im.resize((w, round(im.height * w / im.width)), Image.LANCZOS).save(p, "JPEG", quality=q, optimize=True, progressive=True)
+        c["ok"] = os.path.exists(full) and os.path.exists(thumb)
+        c["tw"], c["th"] = 600, 826
+        if c["ok"] and Image:
+            c["tw"], c["th"] = Image.open(thumb).size
+
+prepare_images()
+CERTS = [c for c in CERTS if c.get("ok")]
+
+
+# ---------- мелкие помощники ----------
+def money(n): return f"{n:,}".replace(",", NB)
+
+def ru_date(iso):
+    y, m, d = map(int, iso.split("-"))
+    return f"{d} {RU_MONTHS[m - 1]} {y}"
+
+def icon(name):
+    p = {
+        "arrow": '<path d="M5 12h14M13 6l6 6-6 6"/>',
+        "chat": '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-9.5L6 20.5V17H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>',
+        "play": '<rect x="3" y="5" width="18" height="14" rx="4"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>',
+        "burst": '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+        "spine": '<rect x="8" y="2.5" width="8" height="3.8" rx="1.9"/><rect x="7" y="8" width="8" height="3.8" rx="1.9"/><rect x="8" y="13.5" width="8" height="3.8" rx="1.9"/><rect x="9.5" y="19" width="6" height="2.8" rx="1.4"/>',
+        "chair": '<path d="M6 3v10h12M6 13v8M18 13v8M6 8h4"/>',
+        "wave": '<path d="M2.5 12c2-8 4 8 6 0s4 8 6 0 4 8 6 0"/>',
+        "heart": '<path d="M12 20.5C6 16.6 3.5 13.3 3.5 9.8A4.3 4.3 0 0 1 12 8a4.3 4.3 0 0 1 8.5 1.8c0 3.5-2.5 6.8-8.5 10.7z"/>',
+    }[name]
+    return f'<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">{p}</svg>'
+
+def more(href, text):
+    return f'<a class="more" href="{href}"><span>{text}</span><i aria-hidden="true">{icon("arrow")}</i></a>'
+
+def btn_wa(label="Записаться в WhatsApp", cls=""):
+    return f'<a class="btn {cls}" href="{e(WA_URL)}" rel="noopener" target="_blank">{icon("chat")}<span>{label}</span></a>'
+
+def sec(inner, cls="", id=""):
+    i = f' id="{id}"' if id else ""
+    return f'<section class="sec {cls}"{i}><div class="wrap">{inner}</div></section>'
+
+def sec_head(title, lede="", tag="h2"):
+    p = f"<p>{lede}</p>" if lede else ""
+    return f'<div class="sec-head"><{tag}>{title}</{tag}>{p}</div>'
+
+def picture(cls="photo", eager=False, sizes="(min-width:52rem) 42vw, 100vw", style=True):
+    srcset = ", ".join(f"/assets/img/photo-{w}.webp {w}w" for w in PHOTO_WIDTHS)
+    source = f'<source type="image/webp" srcset="{srcset}" sizes="{sizes}">' if PHOTO_WIDTHS else ""
+    load = 'fetchpriority="high"' if eager else 'loading="lazy"'
+    st = f' style="--focus:{PHOTO_FOCUS}"' if style else ""
+    return (f'<picture>{source}<img class="{cls}" src="/assets/img/{PHOTO_FILE}" width="{PHOTO_W}" height="{PHOTO_H}" '
+            f'{load} decoding="async" alt="{AUTHOR} — инструктор йоги и йогатерапии"{st}></picture>')
+
+def prices_list(key, cls="prices"):
+    items = "".join(f'<li><span class="num">{money(v)}</span><span class="cur">{CUR[k]}</span></li>' for k, v in PRICES[key].items())
+    return f'<ul class="{cls}" aria-label="Стоимость одного занятия">{items}</ul>'
+
+def prices_text(key):
+    return " или ".join(f"{money(v)}{NB}{CUR[k]}" for k, v in PRICES[key].items())
+
+def pill_prices(key):
+    items = "".join(f'<li>{money(v)}{NB}{CUR[k]}</li>' for k, v in PRICES[key].items())
+    return f'<ul class="pill-prices"><li class="cap">Одно занятие:</li>{items}</ul>'
+
+def plan(key, title, text, link, dark=False):
+    cls = "plan dark" if dark else "plan"
+    lk = f'<div class="{"on-dark" if dark else ""}">{more(*link)}</div>' if link else ""
+    return (f'<article class="{cls}"><div><h3>{title}</h3><p>{text}</p></div>{prices_list(key)}'
+            f'<p class="per">Стоимость одного индивидуального занятия</p>{lk}</article>')
+
+def offers(key, name):
+    return [{"@type": "Offer", "name": name, "price": str(v), "priceCurrency": k,
+             "availability": "https://schema.org/InStock", "url": DOMAIN + "/" + ("online/" if key == "online" else "batumi/")}
+            for k, v in PRICES[key].items()]
+
+def faq_html(qa):
+    rows = "".join(f'<div class="row"><dt>{e(q)}</dt><dd>{e(a)}</dd></div>' for q, a in qa)
+    return f'<dl class="faq">{rows}</dl>'
 
 def faq_node(url, qa):
     return {"@type": "FAQPage", "@id": url + "#faq", "mainEntity": [
         {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in qa]}
 
-def faq_html(qa):
-    return "".join(f"<details><summary>{e(q)}</summary><p>{e(a)}</p></details>" for q, a in qa)
-
 def crumbs(items):
-    vis = " / ".join([f'<a href="{u}">{e(n)}</a>' for u, n in items[:-1]] + [e(items[-1][1])])
+    lis = "".join(f'<li><a href="{u}">{e(n)}</a></li>' for u, n in items[:-1]) + f'<li aria-current="page">{e(items[-1][1])}</li>'
     node = {"@type": "BreadcrumbList", "@id": abs_url(items[-1][0]) + "#breadcrumb", "itemListElement": [
         {"@type": "ListItem", "position": i + 1, "name": n, "item": abs_url(u)} for i, (u, n) in enumerate(items)]}
-    return f'<nav class="crumbs" aria-label="Навигация">{vis}</nav>', node
+    return f'<nav class="crumbs" aria-label="Навигация"><ol>{lis}</ol></nav>', node
 
-def cta(primary="Записаться в WhatsApp", second=("/online/", "Как проходят занятия")):
-    s = f'<a class="btn" href="{e(WA_URL)}" rel="noopener" target="_blank">{primary}</a>'
-    if second:
-        s += f'<a class="btn alt" href="{second[0]}">{second[1]}</a>'
-    return f'<div class="actions">{s}</div>'
+def cta_band(title="Расскажите, что вас беспокоит, и подберём формат занятий",
+             text="Напишите в WhatsApp: отвечу и предложу, с чего начать. Можно онлайн из любой точки мира или очно в Батуми."):
+    return sec(f'<div class="cta"><h2>{title}</h2><div><p>{text}</p><div class="actions">{btn_wa("Написать в WhatsApp", "light")}'
+               f'<a class="btn ghost-dark" href="{YT_URL}" rel="noopener" target="_blank">{icon("play")}<span>YouTube</span></a></div></div></div>', "tight")
 
-def cta_box(title, text):
-    return f'<aside class="cta-box"><h2>{title}</h2><p>{text}</p>{cta(second=None)}</aside>'
+def cert_fan(n=3):
+    imgs = "".join(f'<img src="/assets/img/certificates/{c["slug"]}-thumb.jpg" width="{c["tw"]}" height="{c["th"]}" loading="lazy" '
+                   f'decoding="async" alt="Сертификат «{e(c["title"])}»">' for c in CERTS[:n])
+    return f'<div class="fan">{imgs}</div>'
 
-def photo_img(cls="portrait", eager=True):
-    load = 'fetchpriority="high"' if eager else 'loading="lazy"'
-    return (f'<img class="{cls}" src="{PHOTO}" width="{PHOTO_W}" height="{PHOTO_H}" {load} decoding="async" '
-            f'alt="{AUTHOR} — инструктор йоги и йогатерапии">')
 
-def certs_gallery(limit=None):
-    items = CERTS[:limit] if limit else CERTS
-    if not items: return ""
-    figs = ""
-    for c in items:
-        full = "/assets/img/certificates/" + c["file"]
-        thumb = full.replace(".jpg", "-thumb.jpg")
-        alt = f'Сертификат {c.get("alt", c["title"])}, {c["org"]}, {c["year"]}, {AUTHOR}'
-        figs += (f'<figure><a href="{full}" target="_blank" rel="noopener"><img src="{thumb}" width="600" height="826" '
-                 f'loading="lazy" decoding="async" alt="{e(alt)}"></a>'
-                 f'<figcaption><strong>{e(c["title"])}</strong><br>{e(c["org"])} · {e(c["year"])}</figcaption></figure>')
-    return f'<div class="certs">{figs}</div>'
+# ---------- аудитория ----------
+AUDIENCE = [
+    ("burst", "Скованность и боли", "Мышцы и суставы, которые болят или не слушаются. Возвращаем подвижность мягко и без перегрузок."),
+    ("spine", "Спина и осанка", "Напряжение в спине и шее, проблемы с позвоночником и осанкой."),
+    ("chair", "Сидячая жизнь", "Много сидите и мало двигаетесь: возвращаем телу привычку к движению."),
+    ("wave", "Тревога и стресс", "Часто тревожитесь и устаёте от внутреннего напряжения: учимся замедляться и отпускать."),
+    ("heart", "Беременность и роды", "Подготовка тела к родам и бережное восстановление после них."),
+]
+def bento():
+    cls = ["t-a", "t-b", "t-c", "t-d", "t-e"]
+    tiles = "".join(f'<article class="tile {c}"><span class="ic">{icon(i)}</span><div><h3>{t}</h3><p>{d}</p></div></article>'
+                    for c, (i, t, d) in zip(cls, AUDIENCE))
+    return f'<div class="bento">{tiles}</div>'
 
-def page(path, title, desc, body, graph=(), page_type="WebPage", indexable=True, images=(), og_type="website",
-         extra_page=None):
+def chips():
+    return '<ul class="chips">' + "".join(f'<li><span class="ic">{icon(i)}</span>{t}</li>' for i, t, _ in AUDIENCE) + "</ul>"
+
+LEVEL_P1 = ("Занимаемся <strong>от простого к сложному</strong>. Если вы никогда не пробовали йогу или йогатерапию и думаете, "
+            "что у вас не получится, — получится. Начнём с дыхания и простых движений и пойдём в вашем темпе, без перегрузок и без боли.")
+LEVEL_P2 = "Если практика у вас уже есть, углубим её: поработаем над техникой, контролем движения и тонким чувствованием тела."
+
+
+# ---------- страница ----------
+pages = []
+LASTMOD_FILE = os.path.join(ROOT, "tools", ".lastmod.json")
+try:
+    LASTMOD = json.load(open(LASTMOD_FILE))
+except Exception:
+    LASTMOD = {}
+
+PERSON = {
+    "@type": "Person", "@id": person_id, "name": AUTHOR, "givenName": "Наталья", "familyName": "Умнова",
+    "jobTitle": "Инструктор йоги и йогатерапии",
+    "description": "Инструктор йоги и йогатерапии, специалист по движению и методу Фельденкрайза. Более 10 лет преподаёт йогу и йогатерапию, ведёт индивидуальные занятия онлайн и в Батуми, помогает будущим мамам подготовиться к родам и восстановиться после них.",
+    "url": abs_url("/about/"),
+    "knowsAbout": ["йогатерапия", "метод Фельденкрайза", "миофасциальные упражнения", "соматические практики",
+                   "работа с нервной системой", "йога для беременных", "восстановление после родов", "биомеханика движения", "осанка"],
+    "knowsLanguage": "ru", "workLocation": {"@type": "City", "name": "Батуми"}, "sameAs": [YT_URL],
+}
+if PHOTO_W:
+    PERSON["image"] = {"@type": "ImageObject", "url": abs_url(f"/assets/img/{PHOTO_FILE}"), "width": PHOTO_W, "height": PHOTO_H}
+if CERTS:
+    PERSON["hasCredential"] = [{
+        "@type": "EducationalOccupationalCredential", "name": c["title"], "credentialCategory": "certificate",
+        "recognizedBy": {"@type": "Organization", "name": c["org"]}, "dateCreated": c["issued"],
+        "description": c["desc"], "image": abs_url(f"/assets/img/certificates/{c['slug']}.jpg")} for c in CERTS]
+WEBSITE = {"@type": "WebSite", "@id": website_id, "name": BRAND, "alternateName": "Йогатерапия с Натальей Умновой",
+           "url": DOMAIN + "/", "inLanguage": "ru", "publisher": {"@id": person_id}}
+
+NAV = [("/about/", "Обо мне"), ("/online/", "Онлайн"), ("/batumi/", "Батуми"), ("/certificates/", "Сертификаты"),
+       ("/blog/", "Статьи"), ("/contacts/", "Контакты")]
+CSS_V = hashlib.md5(open(os.path.join(ROOT, "assets", "style.css"), "rb").read()).hexdigest()[:8]
+
+def header(path):
+    def links():
+        return "".join(f'<li><a href="{u}"{" aria-current=page" if (path == u or (u != "/" and path.startswith(u))) else ""}>{n}</a></li>' for u, n in NAV)
+    return (f'<header class="top"><div class="bar"><a class="brand" href="/" aria-label="{BRAND} — на главную">{BRAND}</a>'
+            f'<nav class="menu" aria-label="Основное меню"><ul>{links()}</ul></nav>'
+            f'{btn_wa("WhatsApp", "sm")}'
+            f'<details class="burger"><summary>Меню</summary><nav aria-label="Меню"><ul>{links()}</ul></nav></details></div></header>')
+
+def footer():
+    nav = "".join(f'<li><a href="{u}">{n}</a></li>' for u, n in NAV)
+    return f'''<footer class="foot"><div class="wrap">
+<div class="foot-grid">
+<div><a class="brand" href="/">{BRAND}</a><p>{AUTHOR}. Йогатерапия и метод Фельденкрайза: индивидуальные занятия онлайн и в Батуми.</p></div>
+<nav aria-label="Разделы сайта"><h2>Разделы</h2><ul>{nav}</ul></nav>
+<div><h2>Связаться</h2><ul><li><a href="{e(WA_URL)}" rel="noopener" target="_blank">WhatsApp</a></li><li><a href="{YT_URL}" rel="noopener" target="_blank">YouTube</a></li></ul></div>
+</div>
+<div class="foot-fine"><p>Материалы сайта носят информационный характер и не заменяют консультацию врача. Занятия не являются медицинской услугой. При острой боли, травмах и заболеваниях сначала обратитесь к врачу.</p><p>© {TODAY[:4]} {BRAND}</p></div>
+</div></footer>'''
+
+def page(path, title, desc, body, graph=(), page_type="WebPage", indexable=True, images=(), og_type="website", extra_page=None):
     url = abs_url(path)
-    nav = "".join(f'<li><a href="{u}"{" aria-current=page" if path.startswith(u) else ""}>{n}</a></li>' for u, n in NAV)
-    webpage = {"@type": page_type, "@id": url + "#webpage", "url": url, "name": title, "description": desc,
-               "inLanguage": "ru", "isPartOf": {"@id": website_id}, "dateModified": TODAY,
-               "primaryImageOfPage": {"@type": "ImageObject", "url": abs_url(images[0] if images else OG_IMAGE)}}
+    webpage = {"@type": page_type, "@id": url + "#webpage", "url": url, "name": title, "description": desc, "inLanguage": "ru",
+               "isPartOf": {"@id": website_id}, "primaryImageOfPage": {"@type": "ImageObject", "url": abs_url(OG_IMAGE)}}
     for n in graph:
         if n.get("@type") == "BreadcrumbList": webpage["breadcrumb"] = {"@id": n["@id"]}
     if extra_page: webpage.update(extra_page)
-    nodes = ([WEBSITE, PERSON] + [webpage] + list(graph)) if indexable else []
-    ld = f'<script type="application/ld+json">{json.dumps({"@context": "https://schema.org", "@graph": nodes}, ensure_ascii=False)}</script>' if nodes else ""
+    ld = ""
+    if indexable:
+        ld = '<script type="application/ld+json">' + json.dumps({"@context": "https://schema.org", "@graph": [WEBSITE, PERSON, webpage] + list(graph)}, ensure_ascii=False) + "</script>"
     robots = "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" if indexable else "noindex, follow"
     verify = ""
     if GOOGLE_VERIFY: verify += f'<meta name="google-site-verification" content="{GOOGLE_VERIFY}">\n'
     if YANDEX_VERIFY: verify += f'<meta name="yandex-verification" content="{YANDEX_VERIFY}">\n'
-    og_img = abs_url(OG_IMAGE)
+    og = abs_url(OG_IMAGE)
+    canon = f'<link rel="canonical" href="{url}">' if indexable else ""
     doc = f'''<!doctype html>
 <html lang="ru">
 <head>
@@ -135,75 +313,63 @@ def page(path, title, desc, body, graph=(), page_type="WebPage", indexable=True,
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="robots" content="{robots}">
-{f'<link rel="canonical" href="{url}">' if indexable else ''}
+{canon}
 <meta name="author" content="{AUTHOR}">
-<meta name="theme-color" content="#2f5d50">
+<meta name="theme-color" content="#f1f4f2">
 {verify}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="stylesheet" href="/assets/style.css">
+<link rel="preload" href="/assets/fonts/geologica-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/geologica-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/style.css?v={CSS_V}">
 <meta property="og:type" content="{og_type}">
 <meta property="og:site_name" content="{BRAND}">
 <meta property="og:locale" content="ru_RU">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{url}">
-<meta property="og:image" content="{og_img}">
+<meta property="og:image" content="{og}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="{AUTHOR} — йогатерапия и метод Фельденкрайза онлайн и в Батуми">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{e(title)}">
 <meta name="twitter:description" content="{e(desc)}">
-<meta name="twitter:image" content="{og_img}">
+<meta name="twitter:image" content="{og}">
 {ld}
 </head>
 <body>
 <a class="skip" href="#main">К содержанию</a>
-<header class="site"><div class="wrap">
-<a class="brand" href="/">{BRAND}</a>
-<nav aria-label="Основное меню"><ul>{nav}</ul></nav>
-</div></header>
-<main id="main"><div class="wrap">
+{header(path)}
+<main id="main">
 {body}
-</div></main>
-<footer class="site"><div class="wrap">
-<p><strong>{AUTHOR}</strong> — йогатерапия и метод Фельденкрайза, онлайн и в Батуми</p>
-<p><a href="{e(WA_URL)}" rel="noopener" target="_blank">WhatsApp</a> · <a href="{YT_URL}" rel="noopener" target="_blank">YouTube</a> · <a href="/blog/">Статьи</a> · <a href="/contacts/">Контакты</a></p>
-<p class="small">Материалы сайта носят информационный характер и не заменяют консультацию врача. Занятия не являются медицинской услугой. При острой боли, травмах и заболеваниях сначала обратитесь к врачу.</p>
-<p class="small">© {TODAY[:4]} {BRAND}</p>
-</div></footer>
+</main>
+{footer()}
 </body>
 </html>
 '''
-    target = os.path.join(OUT, path.strip("/"), "index.html") if path != "/404.html" else os.path.join(OUT, "404.html")
+    target = os.path.join(OUT, "404.html") if path == "/404.html" else os.path.join(OUT, path.strip("/"), "index.html")
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    with open(target, "w", encoding="utf-8") as f:
-        f.write("\n".join(l for l in doc.split("\n") if l.strip() != "" or False))
+    with open(target, "w", encoding="utf-8") as f: f.write(doc)
     if indexable:
-        pages.append((url, TODAY, list(images)))
+        h = hashlib.md5(doc.replace(CSS_V, "").encode()).hexdigest()
+        old = LASTMOD.get(url)
+        if not old or old["hash"] != h: LASTMOD[url] = {"hash": h, "date": TODAY}
+        pages.append((url, LASTMOD[url]["date"], list(images)))
 
-# ---------- Общие тексты ----------
-LEVELS_P = ('<p>Занимаемся <strong>от простого к сложному</strong>. Если вы никогда не пробовали йогу или йогатерапию '
-            'и думаете, что «это не для меня» и «у меня не получится», — получится. Начнём с дыхания и простых движений '
-            'и пойдём в вашем темпе, без перегрузок и без боли.</p>'
-            '<p>Если практика у вас уже есть, углубим её: поработаем над техникой, контролем движения '
-            'и тонким чувствованием тела.</p>')
+PHOTO_IMG = [f"/assets/img/{PHOTO_FILE}"] if PHOTO_W else []
+CERT_IMGS = [f"/assets/img/certificates/{c['slug']}.jpg" for c in CERTS]
 
-FOR_WHOM = ('<ul class="checks">'
-            '<li>чувствуете скованность, боли в мышцах или суставах;</li>'
-            '<li>хотите разобраться с напряжением в спине и шее, улучшить осанку;</li>'
-            '<li>много сидите и мало двигаетесь;</li>'
-            '<li>часто тревожитесь и устаёте от постоянного внутреннего напряжения;</li>'
-            '<li>готовитесь к родам или восстанавливаетесь после них.</li></ul>')
 
-# ---------- ГЛАВНАЯ ----------
+# ===================== ГЛАВНАЯ =====================
 HOME_FAQ = [
     ("Что такое йогатерапия?",
      "Йогатерапия — направление йоги, в котором упражнения подбирают под состояние и задачи конкретного человека: снять мышечное напряжение, вернуть подвижность суставам и позвоночнику, улучшить осанку и дыхание. Это не медицинское лечение, а мягкая двигательная практика, которая дополняет рекомендации врача."),
     ("Подойдут ли занятия, если я никогда не занимался йогой?",
      "Да. Занятия идут от простого к сложному и подходят для любого уровня подготовки. Начинаем с дыхания и базовых движений, темп и нагрузку подбираем под вас."),
+    ("Сколько стоят занятия?",
+     f"Индивидуальное онлайн-занятие стоит {prices_text('online')}. Очное занятие в Батуми — {prices_text('batumi')}."),
     ("Как проходят онлайн-занятия?",
      "Индивидуально, по видеосвязи. Наталья видит вас целиком, корректирует технику по ходу занятия и выстраивает практику под ваши цели. Нужны камера, стабильный интернет, коврик и немного свободного места."),
     ("Можно ли заниматься во время беременности?",
@@ -211,111 +377,131 @@ HOME_FAQ = [
     ("Где проходят очные занятия?",
      "В Батуми, индивидуально. Постоянной студии нет, поэтому место и время согласуем под вас. Если вы в другом городе или стране, подойдут онлайн-занятия."),
 ]
-certs_teaser = ""
+
+TRACE = '''<svg class="trace" viewBox="0 0 1200 730" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+<path class="l1" pathLength="1" d="M600 740C720 430 790 700 910 470S1070 170 1230 250"/>
+<path class="l2" pathLength="1" d="M660 760C780 470 850 720 970 520S1110 230 1240 300"/>
+<circle cx="910" cy="470" r="5"/></svg>'''
+
+creds = ""
 if CERTS:
-    certs_teaser = f'<section><h2>Сертификаты и обучение</h2>{certs_gallery(4)}<p><a href="/about/#sertifikaty">Все сертификаты</a></p></section>'
+    pills = "".join(f"<li>{e(c['short'])}</li>" for c in CERTS)
+    creds = (f'<div class="creds"><div class="creds-l">{cert_fan()}<p>Мастер и преподаватель Open Yoga, 9 курсов по йогатерапии и биомеханике. Обучение с 2014 года.</p></div>'
+             f'{more("/certificates/", "Все сертификаты")}</div>')
 
-page("/", "Йогатерапия онлайн и в Батуми — Наталья Умнова | Yogavam",
-     "Индивидуальные занятия йогатерапией и методом Фельденкрайза онлайн и в Батуми. Для новичков и опытных: спина, суставы, осанка, стресс, подготовка к родам.",
-f'''<section class="hero">
-<p class="eyebrow">{AUTHOR} · йогатерапия и метод Фельденкрайза</p>
-<h1>Йогатерапия и метод Фельденкрайза: индивидуальные занятия онлайн и в Батуми</h1>
-<p class="lead">Мягкая практика, которая снимает напряжение, возвращает телу подвижность и радость движения. Программу подбираю под ваше тело, ваши задачи и ваш уровень подготовки.</p>
-{cta()}
-</section>
-<section class="about" id="obo-mne">
-{photo_img()}
-<div>
-<h2>Обо мне</h2>
-<p class="role"><strong>{AUTHOR}</strong> — инструктор йоги и йогатерапии, специалист по движению и методу Фельденкрайза. Более 10 лет преподаю и помогаю восстанавливать женское здоровье.</p>
+home_hero = f'''<section class="hero">{TRACE}<div class="wrap hero-in">
+<h1>Йогатерапия и метод Фельденкрайза<span class="sub">индивидуальные занятия онлайн и в Батуми</span></h1>
+<div class="hero-l"><p class="lead">Мягкая практика, которая снимает напряжение, возвращает телу подвижность и радость движения. Программу подбираю под ваше тело, ваши задачи и ваш уровень подготовки.</p>
+<div class="actions">{btn_wa()}<a class="btn ghost" href="/online/">Как проходят занятия</a></div></div>
+<aside class="hero-card" aria-label="Стоимость занятий"><div class="hc-row"><p>Онлайн</p>{prices_list("online")}</div>
+<div class="hc-row"><p>Очно в Батуми</p>{prices_list("batumi")}</div>
+<div class="hc-more">{more("#stoimost", "Стоимость и форматы")}</div></aside>
+</div></section>'''
+
+home_me = sec(f'''<div class="me"><div class="me-photo">{picture(eager=True)}</div>
+<div class="me-body"><h2>Обо мне</h2>
+<p class="lead-sm"><strong>{AUTHOR}.</strong> Инструктор йоги и йогатерапии, специалист по движению и методу Фельденкрайза. Более 10 лет преподаю и помогаю восстанавливать женское здоровье.</p>
 <p>Я не учу «правильно стоять в асанах». Я учу тело двигаться иначе: свободнее, экономнее, функциональнее, чтобы этот навык работал в обычной жизни — за рабочим столом, с ребёнком на руках, на прогулке.</p>
-<p>На занятиях объединяю йогатерапию, метод Фельденкрайза, миофасциальные упражнения, соматику и работу с нервной системой. Опираюсь на современные данные анатомии, биомеханики и физической реабилитации и объясняю их простым языком: вы понимаете, что происходит в теле и почему.</p>
-<p>Помогаю будущим мамам подготовить тело к родам и мягко восстановиться после них.</p>
-<p>Постоянно учусь и повышаю квалификацию, поэтому в практике всегда есть место новому.</p>
-<p><a href="/about/">Подробнее обо мне</a> · <a href="/about/#sertifikaty">Обучение и сертификаты</a></p>
-</div>
-</section>
-<section>
-<h2>Кому подойдут занятия</h2>
-<p>Приходите, если вы:</p>
-{FOR_WHOM}
-</section>
-<section>
-<h2>Подойдёт для любого уровня — даже если вы никогда не занимались</h2>
-{LEVELS_P}
-</section>
-<section>
-<h2>Как проходят занятия</h2>
-<ol class="steps">
-<li><strong>Знакомство и тесты.</strong> Обсуждаем ваш запрос. Если нужно, проводим двигательные тесты: оцениваем мышцы, суставы и дыхание.</li>
-<li><strong>Практика под ваши цели.</strong> По результатам выстраиваю индивидуальную программу. Начинаем с базы: дыхание, замедление, внимание к ощущениям.</li>
-<li><strong>Заметный прогресс.</strong> Через некоторое время повторяем тесты, и вы сами видите, что изменилось.</li>
-</ol>
-<p><a href="/online/">Подробнее о занятиях и подготовке к онлайн-тренировке</a></p>
-</section>
-{certs_teaser}
-<section>
-<h2>Форматы занятий</h2>
-<div class="grid">
-<div class="card"><h3>Онлайн, индивидуально</h3><p>Персональные тренировки по видеосвязи из любой точки мира. Вижу вас целиком и корректирую технику в моменте.</p><p><a href="/online/">Как проходят онлайн-занятия</a></p></div>
-<div class="card"><h3>Очно в Батуми</h3><p>Индивидуальная работа один на один. Место и время подбираем под ваш график.</p><p><a href="/batumi/">Занятия в Батуми</a></p></div>
-<div class="card"><h3>Статьи</h3><p>Простым языком о теле, движении, методе Фельденкрайза и йогатерапии.</p><p><a href="/blog/">Читать статьи</a></p></div>
-</div>
-</section>
-<section>
-<h2>Частые вопросы</h2>
-{faq_html(HOME_FAQ)}
-</section>
-{cta_box("Сделайте первый шаг", "Напишите мне в WhatsApp и расскажите, что вас беспокоит. Я отвечу и предложу формат первого занятия.")}
-''', graph=[faq_node(DOMAIN + "/", HOME_FAQ)], images=[PHOTO] + [f"/assets/img/certificates/{c['file']}" for c in CERTS[:4]],
-     extra_page={"about": {"@id": person_id}})
+<p>Объединяю йогатерапию, метод Фельденкрайза, миофасциальные упражнения, соматику и работу с нервной системой. Опираюсь на современные данные анатомии и биомеханики. Помогаю будущим мамам подготовить тело к родам и мягко восстановиться после них.</p>
+<p>{more("/about/", "Подробнее обо мне")}</p>
+{creds}</div></div>''', "tight", "obo-mne")
 
-# ---------- ОБО МНЕ ----------
+home_audience = sec(sec_head("Кому подойдут занятия", "Если узнали себя хотя бы в одной ситуации, приходите: программу подберём под вас.") + bento())
+
+home_level = sec(f'''<div class="level"><div><h2>Для любого уровня, даже если вы никогда не занимались</h2><p>{LEVEL_P1}</p><p>{LEVEL_P2}</p></div>
+<ol class="track"><li><b>Дыхание и простые движения</b><span>С чего начинаем, если вы новичок</span></li>
+<li><b>Техника и контроль движения</b><span>Учимся двигаться точнее и свободнее</span></li>
+<li><b>Тонкое чувствование тела</b><span>Практика становится осознанной и глубокой</span></li></ol></div>''', "tight")
+
+home_steps = sec(sec_head("Как проходят занятия", "Персональная работа: от знакомства с вашим телом до заметного результата.") +
+    '''<ol class="steps">
+<li class="step"><b>1</b><h3>Знакомство и тесты</h3><p>Обсуждаем ваш запрос. Если нужно, проводим двигательные тесты: оцениваем мышцы, суставы и дыхание.</p></li>
+<li class="step"><b>2</b><h3>Практика под ваши цели</h3><p>По результатам выстраиваю индивидуальную программу. Начинаем с базы: дыхание, замедление, внимание к ощущениям.</p></li>
+<li class="step"><b>3</b><h3>Заметный прогресс</h3><p>Через некоторое время повторяем тесты, и вы сами видите, что изменилось.</p></li></ol>''' +
+    f'<div class="after">{more("/online/", "Подробнее о занятиях и подготовке")}</div>')
+
+home_plans = sec(sec_head("Форматы и стоимость", "Стоимость одного индивидуального занятия. Запись и вопросы — в WhatsApp.") +
+    '<div class="plans">' +
+    plan("online", "Онлайн", "Индивидуально по видеосвязи из любой точки мира. Вижу вас целиком и корректирую технику по ходу занятия.", ("/online/", "Как проходят онлайн-занятия")) +
+    plan("batumi", "Очно в Батуми", "Работаем один на один. Место и время подбираем под ваш график.", ("/batumi/", "Занятия в Батуми"), dark=True) +
+    "</div>", "tight", "stoimost")
+
+home_faq = sec(sec_head("Частые вопросы") + faq_html(HOME_FAQ))
+
+page("/", f"Йогатерапия онлайн и в Батуми — {AUTHOR} | {BRAND}",
+     f"Индивидуальные занятия йогатерапией и методом Фельденкрайза: онлайн — {prices_text('online')}, очно в Батуми — {prices_text('batumi')}. Для новичков и опытных: спина, суставы, осанка, стресс, подготовка к родам.",
+     home_hero + home_me + home_audience + home_level + home_steps + home_plans + home_faq + cta_band(),
+     graph=[faq_node(DOMAIN + "/", HOME_FAQ)], images=PHOTO_IMG + CERT_IMGS[:3], extra_page={"about": {"@id": person_id}})
+
+
+# ===================== ОБО МНЕ =====================
 cr, cr_ld = crumbs([("/", "Главная"), ("/about/", "Обо мне")])
-page("/about/", "Наталья Умнова — инструктор йоги и йогатерапии, метод Фельденкрайза",
-     "Наталья Умнова: более 10 лет преподаёт йогу и йогатерапию. Метод Фельденкрайза, миофасциальные техники, соматика, йога для беременных и восстановление после родов.",
-f'''{cr}
-<section class="about about-page">
-{photo_img()}
-<div>
-<h1>{AUTHOR}</h1>
+cert_block = ""
+if CERTS:
+    cert_block = (f'<div class="creds" style="margin-top:2rem">'
+                  f'<div class="creds-l">{cert_fan()}<p>Мастер и преподаватель Open Yoga, 9 курсов по йогатерапии и биомеханике. Обучение с 2014 года.</p></div>{more("/certificates/", "Все сертификаты")}</div>')
+about_body = f'''<div class="wrap page-head" style="padding-bottom:0">{cr}</div>
+{sec(f"""<div class="about-grid"><div class="about-photo">{picture(eager=True)}</div>
+<div class="prose"><h1>{AUTHOR}</h1>
 <p class="lead">Инструктор йоги и йогатерапии, специалист по движению и методу Фельденкрайза. Более 10 лет помогаю людям освободиться от скованности и напряжения, вернуть телу подвижность, а себе — радость жизни.</p>
-{cta(second=("/online/", "Как проходят занятия"))}
-</div>
-</section>
-<div class="read">
+<div class="actions">{btn_wa()}<a class="btn ghost" href="/online/">Как проходят занятия</a></div>
 <h2>Мой подход</h2>
 <p>Я выхожу за рамки классических асан. На занятиях соединяю методы йогатерапии, которые развивают телесный интеллект и двигательный контроль, с современным научным взглядом на анатомию, биомеханику и физическую реабилитацию.</p>
 <p>Мы не просто выполняем упражнения, а учим тело двигаться иначе: функциональнее и экономнее. Этот навык вы переносите в повседневную жизнь, и самочувствие меняется не только на коврике.</p>
 <p>Сложные взаимосвязи в теле объясняю простым языком. Когда понимаешь, откуда берётся дискомфорт и что с ним делать, практика становится осознанной и глубокой.</p>
 <h2>Методы, с которыми я работаю</h2>
-<ul>
-<li><strong>Йогатерапия</strong> — упражнения, подобранные под ваше состояние и задачи.</li>
-<li><strong>Метод Фельденкрайза</strong> — обучение лёгкому и осознанному движению. <a href="/blog/metod-feldenkraisa/">Что это за метод</a>.</li>
-<li><strong>Миофасциальные упражнения</strong> — работа с напряжением в мышцах и фасциях.</li>
-<li><strong>Соматические практики</strong> — замедление, тонкое чувствование тела, отпускание зажимов.</li>
-<li><strong>Работа с нервной системой и дыханием</strong> — чтобы снизить уровень стресса и тревоги.</li>
-</ul>
+<ul class="methods">
+<li><b>Йогатерапия</b><span>Упражнения, подобранные под ваше состояние и задачи.</span></li>
+<li><b>Метод Фельденкрайза</b><span>Обучение лёгкому и осознанному движению. <a href="/blog/metod-feldenkraisa/">Что это за метод</a>.</span></li>
+<li><b>Миофасциальные упражнения</b><span>Работа с напряжением в мышцах и фасциях.</span></li>
+<li><b>Соматические практики</b><span>Замедление, тонкое чувствование тела, отпускание зажимов.</span></li>
+<li><b>Работа с нервной системой и дыханием</b><span>Чтобы снизить уровень стресса и тревоги.</span></li></ul>
 <h2>Беременность и восстановление после родов</h2>
 <p>Помогаю будущим мамам подготовить тело к родам мягко и безопасно, с учётом срока и самочувствия. После родов помогаю бережно восстановить силу, подвижность и контакт со своим телом.</p>
-<p class="small">Занятия во время беременности — при отсутствии противопоказаний и после согласования с вашим врачом.</p>
+<p class="fine">Занятия во время беременности — при отсутствии противопоказаний и после согласования с вашим врачом.</p>
 <h2>Кому подойдут персональные тренировки</h2>
-<p>Приглашаю вас, если вы:</p>
-{FOR_WHOM}
-{LEVELS_P}
-<h2 id="sertifikaty">Обучение и сертификаты</h2>
-<p>Прошла обучение в Международном фонде Open Yoga (International Open Yoga Foundation Europe): курс инструкторов (2014–2017, 447 часов теории и 369 часов практики), затем квалификации Open Yoga Teacher (2018) и Open Yoga Master (2021). Сертификаты подтверждаются на сайте фонда.</p>
-<p>Я нахожусь в непрерывном обучении и регулярно повышаю квалификацию: изучаю новые методы работы с телом и проверяю их на практике. Поэтому со мной остаются надолго, даже достигнув результата: нам всегда есть что исследовать.</p>
-</div>
-{certs_gallery()}
-{cta_box("Приходите на занятие", "Напишите в WhatsApp, расскажите о своём запросе, и мы подберём формат: онлайн или очно в Батуми.")}
-''', graph=[cr_ld], page_type="ProfilePage", images=[PHOTO] + [f"/assets/img/certificates/{c['file']}" for c in CERTS],
-     extra_page={"mainEntity": {"@id": person_id}})
+{chips()}
+<p>{LEVEL_P1}</p><p>{LEVEL_P2}</p>
+<h2 id="obuchenie">Обучение и сертификаты</h2>
+<p>Прошла обучение в Международном фонде Open Yoga ({ORG}): курс инструкторов (2014–2017, 447 часов теории и 369 часов практики), затем квалификации «Преподаватель Open Yoga» (2018) и «Мастер Open Yoga» (2021).</p>
+<p>С 2022 по 2024 год прошла цикл курсов «Йогатерапия и биомеханика» в Академии йоги и йогатерапии Татьяны Дудиной (девять курсов, 454 учебных часа): шея, плечо и локоть, грудной отдел и осанка, поясница, таз и крестцово-подвздошный сустав, тазобедренные суставы, тазовое дно, стопы, дыхание.</p>
+<p>Я в непрерывном обучении и регулярно повышаю квалификацию: изучаю новые методы работы с телом и проверяю их на практике. Поэтому со мной остаются надолго, даже достигнув результата: нам всегда есть что исследовать.</p>
+{cert_block}
+</div></div>""")}
+{cta_band("Приходите на занятие", "Напишите в WhatsApp, расскажите о своём запросе, и мы подберём формат: онлайн или очно в Батуми.")}'''
+page("/about/", f"{AUTHOR} — инструктор йоги и йогатерапии, метод Фельденкрайза",
+     "Наталья Умнова: более 10 лет преподаёт йогу и йогатерапию. Метод Фельденкрайза, миофасциальные техники, соматика, йога для беременных и восстановление после родов.",
+     about_body, graph=[cr_ld], page_type="ProfilePage", images=PHOTO_IMG + CERT_IMGS, extra_page={"mainEntity": {"@id": person_id}})
 
-# ---------- ОНЛАЙН / КАК ПРОХОДЯТ ЗАНЯТИЯ ----------
+
+# ===================== СЕРТИФИКАТЫ =====================
+cr, cr_ld = crumbs([("/", "Главная"), ("/certificates/", "Сертификаты")])
+groups = []
+for c in CERTS:
+    if c["group"] not in groups: groups.append(c["group"])
+def cert_card(c):
+    return (f'<article class="cert"><a class="img" href="/assets/img/certificates/{c["slug"]}.jpg" target="_blank" rel="noopener" '
+            f'aria-label="Открыть сертификат «{e(c["title"])}» в полном размере">'
+            f'<img src="/assets/img/certificates/{c["slug"]}-thumb.jpg" width="{c["tw"]}" height="{c["th"]}" loading="lazy" decoding="async" '
+            f'alt="Сертификат «{e(c["title"])}», {e(c["org"])}, {c["issued"][:4]}"></a>'
+            f'<div class="tx"><h3>{e(c["title"])}</h3><p class="org">{e(c["org"])}</p><p class="d">{e(c["desc"])}</p>'
+            f'<p class="when">{("Объём: " + str(c["hours"]) + " ч. ") if c.get("hours") else "Обучение: " + c["period"] + ". "}Выдан <time datetime="{c["issued"]}">{ru_date(c["issued"])}</time></p></div></article>')
+cert_groups = "".join(f'<section class="group"><h2>{e(g)}</h2><div class="certs">{"".join(cert_card(c) for c in CERTS if c["group"] == g)}</div></section>' for g in groups)
+cert_body = f'''<div class="wrap page-head">{cr}<h1>Сертификаты и обучение</h1>
+<p class="lead">Подтверждённое обучение {AUTHOR}: йога, йогатерапия и работа с движением. Нажмите на сертификат, чтобы открыть его в полном размере.</p></div>
+{sec(cert_groups, "tight")}
+{sec(f'<div class="prose"><h2>О моём обучении</h2><p>С 2014 года я учусь в Международном фонде Open Yoga ({ORG}): от курса инструкторов до квалификации мастера. С 2022 года прохожу цикл «Йогатерапия и биомеханика» в {ORG2}: девять курсов по отделам тела, 454 учебных часа. На занятиях я соединяю эту базу с методом Фельденкрайза, миофасциальными и соматическими практиками и современными данными анатомии и биомеханики.</p><p>{more("/about/", "Обо мне и моём подходе")}</p></div>', "tight")}
+{cta_band()}'''
+page("/certificates/", f"Сертификаты и обучение — {AUTHOR}, йогатерапия | {BRAND}",
+     f"Сертификаты {AUTHOR}: мастер и преподаватель Open Yoga, цикл «Йогатерапия и биомеханика» (9 курсов, 454 часа). Обучение с 2014 года.",
+     cert_body, graph=[cr_ld], page_type="CollectionPage", images=CERT_IMGS, extra_page={"about": {"@id": person_id}})
+
+
+# ===================== ОНЛАЙН =====================
 ONLINE_FAQ = [
     ("Что нужно для онлайн-занятия?",
      "Телефон, планшет или ноутбук с камерой, стабильный интернет, коврик и свободное место, чтобы заниматься стоя, сидя и лёжа. Одежда — удобная и облегающая, чтобы было видно положение суставов, таза и позвоночника."),
+    ("Сколько стоит онлайн-занятие?", f"Индивидуальное онлайн-занятие стоит {prices_text('online')}."),
     ("Подойдут ли занятия, если я никогда не занимался йогой?",
      "Да. Занятия идут от простого к сложному: начинаем с дыхания и базовых движений, нагрузку и темп подбираем под вас. Опыт и физическая подготовка не нужны."),
     ("Как установить камеру?",
@@ -323,105 +509,96 @@ ONLINE_FAQ = [
     ("Можно ли заниматься небольшой группой?",
      "Основной формат — индивидуальные занятия. Возможность групповых онлайн-занятий уточняйте в WhatsApp."),
 ]
+def rows(items):
+    return '<div class="rows">' + "".join(f'<div class="row"><h2>{h}</h2><div class="prose">{t}</div></div>' for h, t in items) + "</div>"
+
 cr, cr_ld = crumbs([("/", "Главная"), ("/online/", "Онлайн-занятия")])
 online_service = {"@type": "Service", "@id": DOMAIN + "/online/#service",
                   "name": "Индивидуальные онлайн-занятия йогатерапией и методом Фельденкрайза",
                   "serviceType": "Персональные тренировки по йогатерапии онлайн", "provider": {"@id": person_id},
-                  "areaServed": {"@type": "Place", "name": "Весь мир"}, "availableLanguage": "ru",
-                  "url": DOMAIN + "/online/",
-                  "description": "Индивидуальные занятия по видеосвязи: двигательные тесты, программа под ваши цели, коррекция техники в реальном времени. Для начинающих и опытных."}
-page("/online/", "Как проходят онлайн-занятия йогатерапией — индивидуально | Yogavam",
-     "Индивидуальные онлайн-занятия йогатерапией и методом Фельденкрайза: с чего начинаем, тесты и программа под ваши цели, как подготовиться к занятию.",
-f'''{cr}
-<div class="read">
-<h1>Как проходят онлайн-занятия</h1>
+                  "areaServed": {"@type": "Place", "name": "Весь мир"}, "availableLanguage": "ru", "url": DOMAIN + "/online/",
+                  "description": "Индивидуальные занятия по видеосвязи: двигательные тесты, программа под ваши цели, коррекция техники в реальном времени. Для начинающих и опытных.",
+                  "offers": offers("online", "Индивидуальное онлайн-занятие")}
+prep = '''<ol class="prep">
+<li><b>Подключитесь за 10 минут до начала</b><span>Проверим звук, изображение и положение камеры. Мне важно хорошо видеть вас всё занятие.</span></li>
+<li><b>Наденьте удобную облегающую одежду</b><span>Не слишком свободную и не сковывающую движения: мне нужно видеть положение суставов, таза и позвоночника.</span></li>
+<li><b>Установите камеру так, чтобы в кадре было всё тело</b><span>От головы до стоп, при хорошем освещении. Я могу попросить повернуть камеру, чтобы посмотреть движение сбоку или спереди.</span></li>
+<li><b>Подготовьте место</b><span>Расстелите коврик и освободите пространство вокруг, чтобы удобно заниматься стоя, сидя и лёжа.</span></li></ol>'''
+online_body = f'''<div class="wrap page-head">{cr}<h1>Как проходят онлайн-занятия</h1>
 <p class="lead">Индивидуальные тренировки по видеосвязи из любой точки мира. Я вижу вас, корректирую технику по ходу занятия и выстраиваю практику под ваши цели.</p>
-<h2>Начинаем с базы</h2>
-<p>Первые занятия посвящены базовым навыкам: дыханию, простым движениям, умению замедляться, наблюдать за ощущениями и переключать внимание на тело. Это фундамент, на котором строится всё остальное.</p>
-<h2>Тесты и программа под ваши цели</h2>
-<p>Если нужно, проводим двигательные тесты: оцениваем состояние мышц и суставов, дыхание. По результатам я выстраиваю практику под ваши задачи. Через некоторое время повторяем тесты, и вы своими глазами видите прогресс.</p>
-<h2>Почему мы начинаем со снятия напряжения</h2>
-<p>Мой опыт работы с клиентами показывает: в основе большинства проблем в теле лежит стресс, который копится годами. Мягкие соматические практики помогают замедлиться. Уходит напряжение, тело перестаёт сопротивляться и отпускает зажимы, выравниваются перекосы — и начинаются изменения.</p>
-<h2>Практика без стресса</h2>
-<p>Для меня важно, чтобы занятия не стали для вас ещё одной обязанностью «через силу». Наша цель — регулярность, которая приносит удовольствие и устойчивый результат.</p>
-<h2>Для начинающих и опытных</h2>
-{LEVELS_P}
-<h2>Почему со мной остаются надолго</h2>
-<p>Многие продолжают заниматься и после того, как достигли своей цели. Одна из причин — моё непрерывное обучение: мы вместе исследуем новые методы работы с телом, и практика не превращается в рутину.</p>
-<h2 id="podgotovka">Как подготовиться к онлайн-занятию</h2>
-<p>Чтобы я хорошо видела, как вы выполняете упражнения, вовремя подсказывала и давала рекомендации именно вам, подготовьтесь заранее:</p>
-<ol class="prep">
-<li><strong>Подключитесь за 10 минут до начала.</strong> Проверим звук, изображение и положение камеры: мне важно хорошо видеть вас всё занятие.</li>
-<li><strong>Наденьте удобную облегающую одежду.</strong> Не слишком свободную и не сковывающую движения: мне нужно видеть положение суставов, таза и позвоночника.</li>
-<li><strong>Установите камеру так, чтобы в кадре было всё тело</strong> — от головы до стоп. Выберите хорошо освещённое место. Во время занятия я могу попросить повернуть камеру, чтобы посмотреть движение сбоку или спереди.</li>
-<li><strong>Подготовьте место.</strong> Расстелите коврик и освободите пространство вокруг, чтобы удобно заниматься стоя, сидя и лёжа.</li>
-</ol>
-<p>Моя задача — наблюдать за вами, замечать особенности движений, корректировать технику и давать рекомендации с учётом ваших индивидуальных особенностей. Чем лучше я вас вижу, тем точнее и полезнее наша совместная работа.</p>
-<p>Спасибо за внимательное отношение к практике. До встречи на занятии! 💚</p>
-<h2>Стоимость и запись</h2>
-<p>Стоимость и удобное время обсудим в <a href="{e(WA_URL)}" rel="noopener" target="_blank">WhatsApp</a>. Живёте в Батуми или приехали ненадолго? Есть <a href="/batumi/">очные занятия</a>.</p>
-<h2>Частые вопросы</h2>
-{faq_html(ONLINE_FAQ)}
-</div>
-{cta_box("Найдём причину дискомфорта", "Хотите понять, откуда берутся боль, напряжение и дискомфорт в теле, и избавиться от них? Напишите мне в WhatsApp: пришлю короткую анкету, и по ней мы спланируем первое занятие.")}
-''', graph=[cr_ld, online_service, faq_node(DOMAIN + "/online/", ONLINE_FAQ)], extra_page={"about": {"@id": DOMAIN + "/online/#service"}})
+{pill_prices("online")}
+<div class="actions">{btn_wa()}</div></div>
+{sec(rows([
+ ("Начинаем с базы", "<p>Первые занятия посвящены базовым навыкам: дыханию, простым движениям, умению замедляться, наблюдать за ощущениями и переключать внимание на тело. Это фундамент, на котором строится всё остальное.</p>"),
+ ("Тесты и программа под ваши цели", "<p>Если нужно, проводим двигательные тесты: оцениваем состояние мышц и суставов, дыхание. По результатам я выстраиваю практику под ваши задачи. Через некоторое время повторяем тесты, и вы своими глазами видите прогресс.</p>"),
+ ("Сначала снимаем напряжение", "<p>Мой опыт работы с клиентами показывает: в основе большинства проблем в теле лежит стресс, который копится годами. Мягкие соматические практики помогают замедлиться. Уходит напряжение, тело перестаёт сопротивляться и отпускает зажимы, выравниваются перекосы — и начинаются изменения.</p>"),
+ ("Практика без стресса", "<p>Для меня важно, чтобы занятия не стали для вас ещё одной обязанностью «через силу». Наша цель — регулярность, которая приносит удовольствие и устойчивый результат.</p>"),
+ ("Для начинающих и опытных", f"<p>{LEVEL_P1}</p><p>{LEVEL_P2}</p>"),
+ ("Почему со мной остаются надолго", "<p>Многие продолжают заниматься и после того, как достигли своей цели. Одна из причин — моё непрерывное обучение: мы вместе исследуем новые методы работы с телом, и практика не превращается в рутину.</p>"),
+]), "tight")}
+{sec(f'<div class="sec-head" id="podgotovka"><h2>Как подготовиться к онлайн-занятию</h2><p>Чтобы я хорошо видела вашу технику, вовремя подсказывала и давала рекомендации именно вам, подготовьтесь заранее.</p></div>{prep}<div class="prose"><p>Моя задача — наблюдать за вами, замечать особенности движений, корректировать технику и давать рекомендации с учётом ваших индивидуальных особенностей. Чем лучше я вас вижу, тем точнее и полезнее наша совместная работа.</p><p>Спасибо за внимательное отношение к практике. До встречи на занятии! 💚</p></div>', "tight")}
+{sec(sec_head("Стоимость и запись", "Запись и удобное время — в WhatsApp.") + '<div class="plans one">' + plan("online", "Онлайн-занятие", "Индивидуально по видеосвязи, из любой точки мира.", ("/batumi/", "Живёте в Батуми? Есть очные занятия")) + "</div>", "tight", "stoimost")}
+{sec(sec_head("Частые вопросы") + faq_html(ONLINE_FAQ), "tight")}
+{cta_band("Найдём причину дискомфорта", "Хотите понять, откуда берутся боль, напряжение и дискомфорт в теле, и избавиться от них? Напишите в WhatsApp: пришлю короткую анкету, и по ней спланируем первое занятие.")}'''
+page("/online/", f"Онлайн-занятия йогатерапией — {prices_text('online')} | {BRAND}",
+     f"Индивидуальные онлайн-занятия йогатерапией и методом Фельденкрайза: {prices_text('online')}. С чего начинаем, тесты и программа под ваши цели, как подготовиться к занятию.",
+     online_body, graph=[cr_ld, online_service, faq_node(DOMAIN + "/online/", ONLINE_FAQ)], extra_page={"about": {"@id": DOMAIN + "/online/#service"}})
 
-# ---------- БАТУМИ ----------
+
+# ===================== БАТУМИ =====================
+BATUMI_FAQ = [
+    ("Где проходят занятия в Батуми?", "Работаем один на один. Постоянной студии нет, поэтому место и время согласуем под вас."),
+    ("Сколько стоит очное занятие?", f"Индивидуальное занятие в Батуми стоит {prices_text('batumi')}."),
+    ("Можно ли заниматься во время беременности?", "Да, если нет противопоказаний и ваш врач не возражает. Упражнения подбираются с учётом срока и самочувствия."),
+]
 cr, cr_ld = crumbs([("/", "Главная"), ("/batumi/", "Батуми")])
 batumi_service = {"@type": "Service", "@id": DOMAIN + "/batumi/#service",
                   "name": "Индивидуальные занятия йогатерапией и методом Фельденкрайза в Батуми",
                   "serviceType": "Персональные тренировки по йогатерапии", "provider": {"@id": person_id},
                   "areaServed": {"@type": "City", "name": "Батуми", "containedInPlace": {"@type": "Country", "name": "Грузия"}},
-                  "availableLanguage": "ru", "url": DOMAIN + "/batumi/"}
-page("/batumi/", "Йогатерапия в Батуми — индивидуальные занятия | Наталья Умнова",
-     "Индивидуальные занятия йогатерапией и методом Фельденкрайза в Батуми: персонально, в удобное время. Для начинающих и опытных, для беременных и после родов.",
-f'''{cr}
-<div class="read">
-<h1>Индивидуальные занятия йогатерапией в Батуми</h1>
+                  "availableLanguage": "ru", "url": DOMAIN + "/batumi/", "offers": offers("batumi", "Индивидуальное занятие в Батуми")}
+batumi_body = f'''<div class="wrap page-head">{cr}<h1>Индивидуальные занятия йогатерапией в Батуми</h1>
 <p class="lead">Очные персональные тренировки в Батуми — для тех, кто живёт здесь постоянно или приехал на время.</p>
-<h2>Формат</h2>
-<p>Работаем один на один. Постоянной студии нет, поэтому место и время подбираем вместе, под ваш график.</p>
-<h2>Что происходит на занятии</h2>
-<p>Начинаем с вашего запроса и, если нужно, с двигательных тестов. Дальше — практика под ваши цели: йогатерапия, метод Фельденкрайза, миофасциальные и соматические упражнения, работа с дыханием. Подробнее о структуре — на странице <a href="/online/">«Как проходят занятия»</a>: очно мы работаем по тому же принципу.</p>
-<h2>Кому подойдёт</h2>
-{FOR_WHOM}
-{LEVELS_P}
-<h2>Запись</h2>
-<p>Напишите в <a href="{e(WA_URL)}" rel="noopener" target="_blank">WhatsApp</a>: обсудим запрос, место и время. Если вы не в Батуми, подойдут <a href="/online/">онлайн-занятия</a>.</p>
-</div>
-{cta_box("Записаться на занятие в Батуми", "Расскажите, что вас беспокоит, и я предложу удобное время и место.")}
-''', graph=[cr_ld, batumi_service], extra_page={"about": {"@id": DOMAIN + "/batumi/#service"}})
+{pill_prices("batumi")}
+<div class="actions">{btn_wa()}</div></div>
+{sec(rows([
+ ("Формат", "<p>Работаем один на один. Постоянной студии нет, поэтому место и время подбираем вместе, под ваш график.</p>"),
+ ("Что происходит на занятии", '<p>Начинаем с вашего запроса и, если нужно, с двигательных тестов. Дальше — практика под ваши цели: йогатерапия, метод Фельденкрайза, миофасциальные и соматические упражнения, работа с дыханием. Принцип тот же, что и онлайн: <a href="/online/">как проходят занятия</a>.</p>'),
+ ("Кому подойдёт", f"{chips()}<p>{LEVEL_P1}</p>"),
+]), "tight")}
+{sec(sec_head("Стоимость и запись", "Запись и удобное время — в WhatsApp.") + '<div class="plans one">' + plan("batumi", "Очно в Батуми", "Индивидуальное занятие один на один. Место и время подбираем под ваш график.", ("/online/", "Не в Батуми? Есть онлайн-занятия"), dark=True) + "</div>", "tight", "stoimost")}
+{sec(sec_head("Частые вопросы") + faq_html(BATUMI_FAQ), "tight")}
+{cta_band("Записаться на занятие в Батуми", "Расскажите, что вас беспокоит, и я предложу удобное время и место.")}'''
+page("/batumi/", f"Йогатерапия в Батуми — {prices_text('batumi')} | {AUTHOR}",
+     f"Индивидуальные занятия йогатерапией и методом Фельденкрайза в Батуми: {prices_text('batumi')}. Для начинающих и опытных, для беременных и после родов.",
+     batumi_body, graph=[cr_ld, batumi_service, faq_node(DOMAIN + "/batumi/", BATUMI_FAQ)], extra_page={"about": {"@id": DOMAIN + "/batumi/#service"}})
 
-# ---------- КОНТАКТЫ ----------
+
+# ===================== КОНТАКТЫ =====================
 cr, cr_ld = crumbs([("/", "Главная"), ("/contacts/", "Контакты")])
-page("/contacts/", "Контакты — Наталья Умнова, йогатерапия онлайн и в Батуми",
-     "Как связаться с Натальей Умновой и записаться на индивидуальное занятие йогатерапией онлайн или в Батуми: WhatsApp и YouTube.",
-f'''{cr}
-<div class="read">
-<h1>Контакты</h1>
-<p class="lead">Проще всего написать в WhatsApp: расскажите о своём запросе, и мы подберём формат занятий.</p>
-{cta(primary="Написать в WhatsApp", second=(YT_URL, "YouTube-канал"))}
-<p>Я в Батуми (Грузия, UTC+4). Онлайн-занятия провожу для учеников из любых стран и часовых поясов.</p>
-</div>
-''', graph=[cr_ld], page_type="ContactPage")
+contacts_body = f'''<div class="wrap page-head">{cr}<h1>Контакты</h1>
+<p class="lead">Проще всего написать в WhatsApp: расскажите о своём запросе, и мы подберём формат занятий.</p></div>
+{sec(f"""<div class="contact-cards">
+<a class="cc dark" href="{e(WA_URL)}" rel="noopener" target="_blank"><span class="ic">{icon("chat")}</span><div><h2>WhatsApp</h2><p>Запись на занятие и любые вопросы</p></div></a>
+<a class="cc" href="{YT_URL}" rel="noopener" target="_blank"><span class="ic">{icon("play")}</span><div><h2>YouTube</h2><p>Видео с практиками и разборами</p></div></a></div>
+<div class="prose" style="margin-top:2.5rem"><p>Я в Батуми (Грузия, UTC+4). Онлайн-занятия провожу для учеников из любых стран и часовых поясов.</p>
+<p>Стоимость одного занятия: онлайн — {prices_text('online')}, очно в Батуми — {prices_text('batumi')}.</p></div>""", "tight")}'''
+page("/contacts/", f"Контакты — {AUTHOR}, йогатерапия онлайн и в Батуми",
+     f"Как связаться с {AUTHOR} и записаться на индивидуальное занятие йогатерапией онлайн или в Батуми: WhatsApp и YouTube.",
+     contacts_body, graph=[cr_ld], page_type="ContactPage")
 
-# ---------- БЛОГ ----------
+
+# ===================== БЛОГ =====================
 ARTICLES = [("/blog/metod-feldenkraisa/", "Метод Фельденкрайза: что это и как проходят занятия",
-             "Коротко о методе Фельденкрайза: кто его создал, чем отличаются групповые и индивидуальные занятия, на что обратить внимание новичку.",
-             "2026-10-04")]
+             "Коротко о методе Фельденкрайза: кто его создал, чем отличаются групповые и индивидуальные занятия, на что обратить внимание новичку.", "2026-10-04")]
 cr, cr_ld = crumbs([("/", "Главная"), ("/blog/", "Статьи")])
-cards = "".join(f'<div class="card"><h2 class="h3"><a href="{u}">{e(t)}</a></h2><p class="meta"><time datetime="{d}">{d}</time></p><p>{e(s)}</p></div>' for u, t, s, d in ARTICLES)
-page("/blog/", "Статьи о йогатерапии, методе Фельденкрайза и движении | Yogavam",
-     "Статьи Натальи Умновой о йогатерапии, методе Фельденкрайза, осознанном движении и работе с телом — простым языком.",
-f'''{cr}
-<h1>Статьи</h1>
-<p class="lead">Простым языком о теле, движении и практике.</p>
-<div class="grid">{cards}</div>
-''', graph=[cr_ld, {"@type": "ItemList", "@id": DOMAIN + "/blog/#list", "itemListElement": [
-    {"@type": "ListItem", "position": i + 1, "url": abs_url(u)} for i, (u, *_ ) in enumerate(ARTICLES)]}],
-     page_type="CollectionPage")
+cards = "".join(f'<article class="card"><time datetime="{d}">{ru_date(d)}</time><h2><a href="{u}">{e(t)}</a></h2><p>{e(s)}</p>{more(u, "Читать")}</article>' for u, t, s, d in ARTICLES)
+page("/blog/", f"Статьи о йогатерапии, методе Фельденкрайза и движении | {BRAND}",
+     f"Статьи {AUTHOR} о йогатерапии, методе Фельденкрайза, осознанном движении и работе с телом — простым языком.",
+     f'<div class="wrap page-head">{cr}<h1>Статьи</h1><p class="lead">Простым языком о теле, движении и практике.</p></div>{sec(f"""<div class="cards">{cards}</div>""", "tight")}{cta_band()}',
+     graph=[cr_ld, {"@type": "ItemList", "@id": DOMAIN + "/blog/#list", "itemListElement": [
+         {"@type": "ListItem", "position": i + 1, "url": abs_url(u)} for i, (u, *_) in enumerate(ARTICLES)]}], page_type="CollectionPage")
 
-# ---------- СТАТЬЯ ----------
 ART_FAQ = [
     ("Метод Фельденкрайза — это лечение?", "Нет. Это педагогический метод обучения осознанному движению, он не заменяет медицинскую помощь. При болях и травмах сначала обратитесь к врачу."),
     ("Нужна ли физическая подготовка?", "Нет. Движения, как правило, небольшие и выполняются в комфортном диапазоне, поэтому метод доступен людям с разным уровнем подготовки."),
@@ -430,14 +607,15 @@ ART_FAQ = [
 u, t, s, d = ARTICLES[0]
 cr, cr_ld = crumbs([("/", "Главная"), ("/blog/", "Статьи"), (u, t)])
 article = {"@type": "Article", "@id": abs_url(u) + "#article", "headline": t, "description": s, "inLanguage": "ru",
-           "datePublished": d, "dateModified": TODAY, "author": {"@id": person_id}, "publisher": {"@id": person_id},
-           "mainEntityOfPage": {"@id": abs_url(u) + "#webpage"}, "image": abs_url(OG_IMAGE),
-           "about": [{"@type": "Thing", "name": "Метод Фельденкрайза"}]}
-page(u, t + " | Yogavam", s,
-f'''{cr}
-<article class="read">
-<h1>{e(t)}</h1>
-<p class="meta">Автор: <a href="/about/" rel="author">{AUTHOR}</a>, инструктор йоги и йогатерапии · <time datetime="{d}">{d}</time> · чтение ~4 мин</p>
+           "datePublished": d, "dateModified": LASTMOD.get(abs_url(u), {}).get("date", d), "author": {"@id": person_id}, "publisher": {"@id": person_id},
+           "mainEntityOfPage": {"@id": abs_url(u) + "#webpage"}, "image": abs_url(OG_IMAGE), "about": [{"@type": "Thing", "name": "Метод Фельденкрайза"}]}
+author_box = ""
+if PHOTO_W:
+    author_box = (f'<a class="author" href="/about/" style="text-decoration:none">{picture("", False, "4rem")}'
+                  f'<p><b>{AUTHOR}</b>Инструктор йоги и йогатерапии. Обо мне и моём подходе</p></a>')
+page(u, f"{t} | {BRAND}", s,
+     f'''<div class="wrap page-head" style="padding-bottom:0">{cr}</div>{sec(f"""<article class="article prose">
+<h1>{e(t)}</h1><p class="meta">Автор: <a href="/about/" rel="author">{AUTHOR}</a>. <time datetime="{d}">{ru_date(d)}</time>, чтение около 4 минут</p>
 <p class="lead"><strong>Метод Фельденкрайза — это система занятий, в которой человек учится замечать, как он двигается, и находить более лёгкие способы движения.</strong> Это обучение, а не лечение и не фитнес.</p>
 <h2>Кто создал метод</h2>
 <p>Метод разработал Моше Фельденкрайз (1904–1984) — физик и инженер, занимавшийся также дзюдо. Он исследовал, как движение, внимание и привычки связаны между собой, и на этой основе построил систему занятий.</p>
@@ -450,63 +628,62 @@ f'''{cr}
 <p>Движения небольшие и медленные, усилие минимальное; цель — прислушаться к ощущениям, а не «растянуться» или «наработать» мышцы. После занятия многие отмечают, что стоять и ходить стало иначе, но это личный опыт, а не гарантированный результат.</p>
 <h2>Как я использую метод на своих занятиях</h2>
 <p>На персональных тренировках я сочетаю метод Фельденкрайза с йогатерапией, миофасциальными и соматическими упражнениями. Подробнее — на странице <a href="/online/">«Как проходят занятия»</a>.</p>
-<div class="note">Метод не заменяет медицинскую помощь. При острой боли, травме или заболевании сначала проконсультируйтесь с врачом.</div>
+<div class="note"><p>Метод не заменяет медицинскую помощь. При острой боли, травме или заболевании сначала проконсультируйтесь с врачом.</p></div>
 <h2>Частые вопросы</h2>
 {faq_html(ART_FAQ)}
-</article>
-{cta()}
-''', graph=[cr_ld, article, faq_node(abs_url(u), ART_FAQ)], og_type="article")
+{author_box}</article>""", "tight")}{cta_band()}''',
+     graph=[cr_ld, article, faq_node(abs_url(u), ART_FAQ)], og_type="article")
 
-# ---------- 404 ----------
-page("/404.html", "Страница не найдена | Yogavam", "Страница не найдена.",
-     '<h1>Страница не найдена</h1><p>Проверьте адрес или перейдите <a href="/">на главную</a>.</p>', indexable=False)
 
-# ---------- ТЕХНИЧЕСКИЕ ФАЙЛЫ ----------
+# ===================== 404 =====================
+page("/404.html", f"Страница не найдена | {BRAND}", "Страница не найдена.",
+     sec(f'<h1>Страница не найдена</h1><p class="lead" style="margin-top:1.25rem">Проверьте адрес или вернитесь на главную.</p><div class="actions"><a class="btn" href="/">На главную</a></div>'),
+     indexable=False)
+
+
+# ===================== технические файлы =====================
 def w(name, text):
-    p = os.path.join(OUT, name); os.makedirs(os.path.dirname(p), exist_ok=True)
+    p = os.path.join(OUT, name)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as f: f.write(text)
 
-w("robots.txt", f"""# Разрешено всем, включая поисковые и ИИ-краулеры (Googlebot, Bingbot, YandexBot, OAI-SearchBot, PerplexityBot, ClaudeBot и др.)
+w("robots.txt", f"""# Разрешено всем, включая поисковые и ИИ-краулеры
 User-agent: *
 Allow: /
 
 Sitemap: {DOMAIN}/sitemap.xml
 """)
-
-def sm_entry(url, lastmod, imgs):
+def sm(url, lastmod, imgs):
     im = "".join(f"<image:image><image:loc>{abs_url(i)}</image:loc></image:image>" for i in imgs)
     return f"  <url><loc>{url}</loc><lastmod>{lastmod}</lastmod>{im}</url>"
 w("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
-  'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n' + "\n".join(sm_entry(*p) for p in pages) + "\n</urlset>\n")
-
+  'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n' + "\n".join(sm(*p) for p in pages) + "\n</urlset>\n")
 w("llms.txt", f"""# {BRAND}
 
 > Сайт Натальи Умновой — инструктора йоги и йогатерапии, специалиста по движению и методу Фельденкрайза. Индивидуальные занятия онлайн (из любой страны) и очно в Батуми (Грузия). Язык: русский.
 
 Ключевые факты:
-- Более 10 лет преподаёт йогу и йогатерапию.
+- Более 10 лет преподаёт йогу и йогатерапию. Обучение в International Open Yoga Foundation Europe с 2014 года: курс инструкторов, преподаватель, мастер Open Yoga. С 2022 года цикл «Йогатерапия и биомеханика» в Академии йоги и йогатерапии Татьяны Дудиной: 9 курсов, 454 часа.
 - Методы: йогатерапия, метод Фельденкрайза, миофасциальные упражнения, соматические практики, работа с нервной системой и дыханием.
-- Опирается на современные данные анатомии, биомеханики и физической реабилитации.
 - Подготовка к родам и восстановление после родов.
 - Подходит для любого уровня, в том числе для тех, кто никогда не занимался.
-- Запись через WhatsApp, онлайн-бронирования нет. Занятия не являются медицинской услугой.
+- Стоимость одного индивидуального занятия: онлайн — {prices_text('online')}; очно в Батуми — {prices_text('batumi')}.
+- Запись через WhatsApp. Занятия не являются медицинской услугой.
 
 ## Страницы
-- [Обо мне]({DOMAIN}/about/): биография, подход, методы, обучение и сертификаты
-- [Как проходят онлайн-занятия]({DOMAIN}/online/): структура занятий, тесты, подготовка к онлайн-занятию, FAQ
-- [Занятия в Батуми]({DOMAIN}/batumi/): очные индивидуальные занятия
+- [Обо мне]({DOMAIN}/about/): биография, подход, методы
+- [Сертификаты]({DOMAIN}/certificates/): обучение и квалификации
+- [Как проходят онлайн-занятия]({DOMAIN}/online/): структура занятий, тесты, подготовка, цена, FAQ
+- [Занятия в Батуми]({DOMAIN}/batumi/): очные индивидуальные занятия, цена
 - [Контакты]({DOMAIN}/contacts/): WhatsApp, YouTube
 
 ## Статьи
 """ + "".join(f"- [{t}]({abs_url(u)}): {s}\n" for u, t, s, _ in ARTICLES))
-
-w("site.webmanifest", json.dumps({"name": f"{BRAND} — {AUTHOR}", "short_name": BRAND, "lang": "ru",
-    "start_url": "/", "display": "browser", "background_color": "#faf7f2", "theme_color": "#2f5d50",
-    "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
-              {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}]}, ensure_ascii=False, indent=1))
+w("site.webmanifest", json.dumps({"name": f"{BRAND} — {AUTHOR}", "short_name": BRAND, "lang": "ru", "start_url": "/", "display": "browser",
+    "background_color": "#f1f4f2", "theme_color": "#f1f4f2",
+    "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}]},
+    ensure_ascii=False, indent=1))
 w("CNAME", "yogavam.com\n")
 w(".nojekyll", "")
-
-if PLACEHOLDER(WA_NUMBER) or PLACEHOLDER(YT_URL):
-    print("ВНИМАНИЕ: не заполнены WA_NUMBER / YT_URL")
-print("OK:", len(pages), "страниц ->", OUT)
+json.dump(LASTMOD, open(LASTMOD_FILE, "w"), ensure_ascii=False, indent=1)
+print("OK:", len(pages), "страниц; сертификатов:", len(CERTS), "; фото:", PHOTO_W, "x", PHOTO_H)
