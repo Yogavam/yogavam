@@ -1,34 +1,54 @@
 {
  "https://yogavam.com/": {
-  "hash": "f4b08ac48c7c349fbcaf060b41badecd",
-  "date": "2026-11-04"
+  "hash": "a43ebb40f434afe0773df02c3c0f99c5",
+  "date": "2026-11-12"
  },
  "https://yogavam.com/about/": {
-  "hash": "f86cc6bf664555bf09095f8e75786c67",
-  "date": "2026-11-04"
+  "hash": "cd65019b618defdcc5e8cbc90276abbc",
+  "date": "2026-11-12"
  },
  "https://yogavam.com/certificates/": {
-  "hash": "777b5af52887671345044de9e278f509",
-  "date": "2026-11-04"
+  "hash": "592e7939f5667f463bc67c79a78572a4",
+  "date": "2026-11-12"
  },
  "https://yogavam.com/online/": {
-  "hash": "5c6cd53108269d5948047265a15026fd",
-  "date": "2026-11-04"
+  "hash": "85f36548719ccf07acd4324623fe1a2f",
+  "date": "2026-11-12"
  },
  "https://yogavam.com/batumi/": {
-  "hash": "9632cfef0a1b14c18d5417c594cd65af",
-  "date": "2026-11-04"
+  "hash": "db2885f759fa032c2673841a802730a1",
+  "date": "2026-11-12"
  },
  "https://yogavam.com/contacts/": {
-  "hash": "051a44bebcbbe48fdb08b6bbd5279935",
-  "date": "2026-11-04"
+  "hash": "68c17aa361bb194d00ae178297282548",
+  "date": "2026-11-12"
  },
  "https://yogavam.com/blog/": {
-  "hash": "f6f336d3090a5f6174c69dad659ef70e",
-  "date": "2026-11-04"
+  "hash": "bb7147ba60c39e353e1054abc7747072",
+  "date": "2026-11-12"
  },
  "https://yogavam.com/blog/metod-feldenkraisa/": {
-  "hash": "91876e65d08aa8f56b432b03e0f5bdd8",
-  "date": "2026-11-04"
+  "hash": "e94e3d41351ff45f6af11cc63a84b4d0",
+  "date": "2026-11-12"
+ },
+ "https://yogavam.com/bol-v-spine/": {
+  "hash": "5517f58fe3d77ef0a6eff6629b4463dd",
+  "date": "2026-11-12"
+ },
+ "https://yogavam.com/osanka/": {
+  "hash": "749c4d33fc7835f07842c61279d982d5",
+  "date": "2026-11-12"
+ },
+ "https://yogavam.com/sustavy/": {
+  "hash": "5d64547f10308cba7f00885bd1d1fea7",
+  "date": "2026-11-12"
+ },
+ "https://yogavam.com/zhenskoe-zdorovie/": {
+  "hash": "8c6039d9254a29833cecb3d704a0e288",
+  "date": "2026-11-12"
+ },
+ "https://yogavam.com/stress-i-dyhanie/": {
+  "hash": "2325a78f04abe41067ab7d946796ab4a",
+  "date": "2026-11-12"
  }
 }
