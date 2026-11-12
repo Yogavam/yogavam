@@ -40,6 +40,12 @@ a:hover{text-decoration-color:currentColor}
 .menu a{display:block;padding:.5rem .9rem;border-radius:999px;text-decoration:none;font-size:.95rem;transition:background .2s}
 .menu a:hover{background:rgba(13,89,86,.09)}
 .menu a[aria-current],.burger a[aria-current]{background:var(--ink);color:#fff}
+.hdr-icons{display:flex;gap:.4rem}
+.ibtn{display:grid;place-items:center;flex:none;width:2.6rem;height:2.6rem;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink);transition:background .2s,color .2s}
+.ibtn:hover{background:var(--foam)}
+.ibtn.wa{background:var(--sea);color:#fff;border-color:transparent}
+.ibtn.wa:hover{background:var(--sea-ink)}
+.ibtn svg{width:1.3rem;height:1.3rem}
 .burger{display:none}
 .burger summary{list-style:none;cursor:pointer;padding:.62rem 1rem;border-radius:999px;border:1px solid var(--line);font-size:.95rem;background:#fff}
 .burger summary::-webkit-details-marker{display:none}
@@ -61,6 +67,8 @@ a:hover{text-decoration-color:currentColor}
 .btn.ghost-dark{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
 .btn.ghost-dark:hover{background:rgba(255,255,255,.1)}
 .actions{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1.75rem}
+.pair .btn{flex:0 0 auto}
+@media (max-width:40rem){.pair .btn{flex:1 1 100%}}
 .more{display:inline-flex;align-items:center;gap:.75rem;padding:.2rem .25rem .2rem 0;text-decoration:none;font-weight:500;color:var(--ink)}
 .more i{display:grid;place-items:center;flex:none;width:2.3rem;height:2.3rem;border-radius:50%;background:var(--foam);color:var(--sea-ink);transition:transform .25s,background .25s,color .25s}
 .more svg{width:1rem;height:1rem}
@@ -78,10 +86,10 @@ a:hover{text-decoration-color:currentColor}
 .trace circle{fill:var(--sea);opacity:0;animation:pop .5s 2.4s forwards}
 @keyframes draw{to{stroke-dashoffset:0}}
 @keyframes pop{to{opacity:.55}}
-.hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:2.5rem 3rem;align-items:end}
-.hero h1{grid-column:1/-1;max-width:21ch}
+.hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:2.5rem 3rem;align-items:center}
+.hero h1{max-width:none;font-size:clamp(2.2rem,4.3vw,3.9rem)}
 .hero h1 .sub{display:block;margin-top:.5em;font-size:.38em;line-height:1.25;letter-spacing:-.015em;color:var(--muted)}
-.hero .lead{max-width:34rem;margin:0;font-size:clamp(1.1rem,1.6vw,1.3rem);line-height:1.55;color:var(--muted);font-weight:300}
+.hero .lead{max-width:34rem;margin:1.5rem 0 0;font-size:clamp(1.1rem,1.6vw,1.3rem);line-height:1.55;color:var(--muted);font-weight:300}
 
 .hero-card{padding:1.5rem 1.7rem;border-radius:2rem;background:rgba(255,255,255,.72);border:1px solid var(--line);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
 .hc-row+.hc-row{margin-top:1.2rem;padding-top:1.2rem;border-top:1px solid var(--line)}
@@ -96,9 +104,6 @@ a:hover{text-decoration-color:currentColor}
 /* ---------- заголовок секции ---------- */
 .sec-head{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:1rem 3rem;align-items:end;margin-bottom:clamp(1.75rem,3.5vw,3rem)}
 .sec-head p{margin:0;color:var(--muted);max-width:30rem}
-.contact-box{margin-top:1rem;padding:1.1rem 1.3rem 1.25rem;border-radius:1.5rem;background:#fff;border:1px solid var(--line);max-width:34rem}
-.contact-box p{margin:0;font-size:.92rem}
-.contact-box .actions{margin-top:.8rem;gap:.5rem}
 @media (max-width:56rem){.sec-head{grid-template-columns:1fr}}
 
 /* ---------- обо мне ---------- */
@@ -188,6 +193,12 @@ a:hover{text-decoration-color:currentColor}
 .plan p{margin:.5rem 0 0;color:var(--sea-ink);max-width:28rem}
 .plan.dark p{color:rgba(255,255,255,.8)}
 .plan .more{margin-top:auto}
+.plan.book{background:#fff;border:1px solid var(--line);justify-content:space-between}
+.plan.book .actions{margin-top:auto}
+.book-strip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem 2rem;margin-top:.9rem;padding:1.4rem 1.75rem;border-radius:2rem;background:#fff;border:1px solid var(--line)}
+.book-strip h3{font-size:1.3rem;font-weight:400;letter-spacing:-.02em}
+.book-strip p{margin:.25rem 0 0;color:var(--muted)}
+.book-strip .actions{margin:0}
 .prices{display:flex;flex-wrap:wrap;gap:.9rem 0;list-style:none;margin:0;padding:0}
 .prices li{display:flex;align-items:baseline;padding:0 1.35rem;border-left:1px solid rgba(20,33,31,.22)}
 .prices li:first-child{padding-left:0;border-left:0}
@@ -208,10 +219,11 @@ a:hover{text-decoration-color:currentColor}
 @media (max-width:52rem){.faq .row{grid-template-columns:1fr;padding:1.4rem 0}}
 
 /* ---------- CTA ---------- */
-.cta{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:1.5rem 3rem;align-items:end;padding:clamp(2rem,6vw,4.5rem);border-radius:2.5rem;background:var(--sea-ink);color:#fff}
-.cta h2{font-size:clamp(1.9rem,4.2vw,3.4rem);max-width:18ch}
-.cta p{margin:0 0 1.5rem;color:rgba(255,255,255,.78);max-width:26rem}
+.cta{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:1.25rem 3rem;align-items:center;padding:clamp(1.5rem,4vw,3rem);border-radius:2.5rem;background:var(--sea-ink);color:#fff}
+.cta h2{font-size:clamp(1.6rem,3vw,2.5rem);max-width:none}
+.cta p{margin:0 0 1.25rem;color:rgba(255,255,255,.78);max-width:none}
 .cta .actions{margin-top:0}
+@media (min-width:64rem){.cta .actions{flex-wrap:nowrap}}
 @media (max-width:52rem){.cta{grid-template-columns:1fr}}
 
 /* ---------- внутренние страницы ---------- */

@@ -18,7 +18,8 @@ AUTHOR = "Наталья Умнова"
 AUTHOR_FIRST = "Наталья"
 WA_NUMBER = "995599018912"
 YT_URL = "https://www.youtube.com/@yogaumnova"
-TG_URL = "https://t.me/yogaumnova"
+TG_URL = "https://t.me/NatalyaUmnova"      # личный контакт: кнопки и «Связаться»
+TG_CHANNEL_URL = "https://t.me/+vvqzY9JIwrQ4YjNi"   # канал: только иконка в подвале (в sameAs не входит)
 IG_URL = "https://www.instagram.com/nata_umnova_/"
 FORM_KEY = ""                         # ключ Web3Forms (access_key). Пока пусто: форма и кнопка «Написать» не выводятся
 PHOTO_FILE = "natalya-umnova.jpg"     # исходное фото: assets/img/natalya-umnova.jpg (вертикальное 4:5, от 1200×1500)
@@ -163,27 +164,29 @@ def icon(name):
 def more(href, text):
     return f'<a class="more" href="{href}"><span>{text}</span><i aria-hidden="true">{icon("arrow")}</i></a>'
 
-def btn_wa(label="Записаться в WhatsApp", cls=""):
-    return f'<a class="btn {cls}" href="{e(WA_URL)}" rel="noopener" target="_blank">{icon("whatsapp")}<span>{label}</span></a>'
-
-def contact_row(wa_cls="", cls="ghost", wa_label="Записаться в WhatsApp"):
-    """WhatsApp + Telegram + «Написать» (последние две — только если заданы TG_URL / FORM_KEY)"""
-    out = btn_wa(wa_label, wa_cls)
+def contact_pair(cls=""):
+    """«Написать в WhatsApp» + «Написать в Telegram» (cls="dark" для тёмного фона); «Написать» — только при FORM_KEY"""
+    a, b = ("light", "ghost-dark") if cls == "dark" else ("", "ghost")
+    out = f'<a class="btn {a}" href="{e(WA_URL)}" rel="noopener" target="_blank">{icon("whatsapp")}<span>Написать в WhatsApp</span></a>'
     if TG_URL:
-        out += f'<a class="btn {cls}" href="{e(TG_URL)}" rel="noopener" target="_blank">{icon("telegram")}<span>Telegram</span></a>'
+        out += f'<a class="btn {b}" href="{e(TG_URL)}" rel="noopener" target="_blank">{icon("telegram")}<span>Написать в Telegram</span></a>'
     if FORM_KEY:
-        out += f'<a class="btn {cls}" href="/contacts/#napisat">{icon("mail")}<span>Написать</span></a>'
-    return out
+        out += f'<a class="btn {b}" href="/contacts/#napisat">{icon("mail")}<span>Написать</span></a>'
+    return f'<div class="actions pair">{out}</div>'
 
-def contact_box(title="Запись и удобное время"):
-    return f'<div class="contact-box"><p>{title}</p><div class="actions">{contact_row("sm", "ghost sm", "WhatsApp")}</div></div>'
+def book_strip():
+    return (f'<div class="book-strip"><div><h3>Записаться на занятие</h3><p>Напишите, и подберём удобное время</p></div>{contact_pair()}</div>')
+
+def book_card():
+    return (f'<article class="plan book"><div><h3>Записаться на занятие</h3><p>Напишите, и подберём удобное время.</p></div>'
+            f'{contact_pair()}</article>')
 
 def sec(inner, cls="", id=""):
     i = f' id="{id}"' if id else ""
     return f'<section class="sec {cls}"{i}><div class="wrap">{inner}</div></section>'
 
-def sec_head(title, lede="", tag="h2", lede_html=""):
-    p = lede_html or (f"<p>{lede}</p>" if lede else "")
+def sec_head(title, lede="", tag="h2"):
+    p = f"<p>{lede}</p>" if lede else ""
     return f'<div class="sec-head"><{tag}>{title}</{tag}>{p}</div>'
 
 def picture(cls="photo", eager=False, sizes="(min-width:52rem) 42vw, 100vw", style=True):
@@ -232,7 +235,7 @@ def crumbs(items):
 
 def cta_band(title="Расскажите, что вас беспокоит, и подберём формат занятий",
              text="Напишите в WhatsApp или Telegram: отвечу и предложу, с чего начать. Можно онлайн из любой точки мира или очно в Батуми."):
-    return sec(f'<div class="cta"><h2>{title}</h2><div><p>{text}</p><div class="actions">{contact_row("light", "ghost-dark", "Написать в WhatsApp")}</div></div></div>', "tight")
+    return sec(f'<div class="cta"><h2>{title}</h2><div><p>{text}</p>{contact_pair("dark")}</div></div>', "tight")
 
 def cert_fan(n=3):
     imgs = "".join(f'<img src="/assets/img/certificates/{c["slug"]}-thumb.jpg" width="{c["tw"]}" height="{c["th"]}" loading="lazy" '
@@ -392,12 +395,18 @@ NAV = [("/about/", "Обо мне"), ("/online/", "Онлайн"), ("/batumi/", 
        ("/blog/", "Статьи"), ("/contacts/", "Контакты")]
 CSS_V = hashlib.md5(open(os.path.join(ROOT, "assets", "style.css"), "rb").read()).hexdigest()[:8]
 
+def header_icons():
+    out = f'<a class="ibtn wa" href="{e(WA_URL)}" rel="noopener" target="_blank" aria-label="Написать в WhatsApp">{icon("whatsapp")}</a>'
+    if TG_URL:
+        out += f'<a class="ibtn" href="{e(TG_URL)}" rel="noopener" target="_blank" aria-label="Написать в Telegram">{icon("telegram")}</a>'
+    return f'<div class="hdr-icons">{out}</div>'
+
 def header(path):
     def links():
         return "".join(f'<li><a href="{u}"{" aria-current=page" if (path == u or (u != "/" and path.startswith(u))) else ""}>{n}</a></li>' for u, n in NAV)
     return (f'<header class="top"><div class="bar"><a class="brand" href="/" aria-label="{BRAND} — на главную">{BRAND}</a>'
             f'<nav class="menu" aria-label="Основное меню"><ul>{links()}</ul></nav>'
-            f'{btn_wa("WhatsApp", "sm")}'
+            f'{header_icons()}'
             f'<details class="burger"><summary>Меню</summary><nav aria-label="Меню"><ul>{links()}</ul></nav></details></div></header>')
 
 def footer():
@@ -407,7 +416,7 @@ def footer():
     if TG_URL: contacts += f'<li><a href="{e(TG_URL)}" rel="noopener" target="_blank">Telegram</a></li>'
     if FORM_KEY: contacts += '<li><a href="/contacts/#napisat">Написать</a></li>'
     soc = ""
-    for url, label, ic in ((YT_URL, "YouTube", "youtube"), (IG_URL, "Instagram", "instagram")):
+    for url, label, ic in ((YT_URL, "YouTube", "youtube"), (IG_URL, "Instagram", "instagram"), (TG_CHANNEL_URL, "Telegram-канал", "telegram")):
         if url: soc += f'<li><a href="{e(url)}" rel="noopener" target="_blank" aria-label="{label}">{icon(ic)}</a></li>'
     soc = f'<ul class="social">{soc}</ul>' if soc else ""
     return f'''<footer class="foot"><div class="wrap">
@@ -521,9 +530,9 @@ if CERTS:
              f'{more("/certificates/", "Все сертификаты")}</div>')
 
 home_hero = f'''<section class="hero">{TRACE}<div class="wrap hero-in">
-<h1>Йогатерапия для спины, осанки и здорового движения<span class="sub">индивидуальные занятия онлайн и в Батуми</span></h1>
-<div class="hero-l"><p class="lead">Мягкая практика, которая помогает снять напряжение и вернуть телу подвижность. Программу подбираю под ваше тело, ваши задачи и ваш уровень подготовки.</p>
-<div class="actions">{contact_row()}</div></div>
+<div class="hero-l"><h1>Йогатерапия для спины, осанки и здорового движения<span class="sub">индивидуальные занятия онлайн и в Батуми</span></h1>
+<p class="lead">Мягкая практика, которая помогает снять напряжение и вернуть телу подвижность. Программу подбираю под ваше тело, ваши задачи и ваш уровень подготовки.</p>
+{contact_pair()}</div>
 {price_card()}
 </div></section>'''
 home_dirs = sec('<p class="strip-t">Направления занятий</p>' + chips(), "tight strip")
@@ -550,11 +559,11 @@ home_steps = sec(sec_head("Как проходят занятия", "Персо�
 <li class="step"><b>3</b><h3>Заметный прогресс</h3><p>Через некоторое время повторяем тесты, и вы сами видите, что изменилось.</p></li></ol>''' +
     f'<div class="after">{more("/online/", "Подробнее о занятиях и подготовке")}</div>')
 
-home_plans = sec(sec_head("Форматы и стоимость", lede_html="<div><p>Стоимость одного занятия, 1 час.</p>" + contact_box() + "</div>") +
+home_plans = sec(sec_head("Форматы и стоимость", "Стоимость одного занятия, 1 час.") +
     '<div class="plans">' +
     plan("online", "Онлайн", "Индивидуально по видеосвязи из любой точки мира. Вижу вас целиком и корректирую технику по ходу занятия.", ("/online/", "Как проходят онлайн-занятия")) +
     plan("batumi", "Очно в Батуми", "Работаем один на один. Место и время подбираем под ваш график.", ("/batumi/", "Занятия в Батуми"), dark=True) +
-    "</div>", "tight", "stoimost")
+    "</div>" + book_strip(), "tight", "stoimost")
 
 home_faq = sec(sec_head("Частые вопросы") + faq_html(HOME_FAQ))
 
@@ -583,7 +592,7 @@ about_body = f'''<div class="wrap page-head" style="padding-bottom:0">{cr}</div>
 {sec(f"""<div class="about-grid"><div class="about-photo">{picture(eager=True)}</div>
 <div class="prose"><h1>{AUTHOR}</h1>
 <p class="lead">Инструктор йоги и йогатерапии, специалист по движению и методу Фельденкрайза. Более 10 лет помогаю людям освободиться от скованности и напряжения, вернуть телу подвижность, а себе — радость жизни.</p>
-<div class="actions">{btn_wa()}<a class="btn ghost" href="/online/">Как проходят занятия</a></div>
+{contact_pair()}
 <h2>Мой подход</h2>
 <p>Я выхожу за рамки классических асан. На занятиях соединяю методы йогатерапии, которые развивают телесный интеллект и двигательный контроль, с современным научным взглядом на анатомию, биомеханику и физическую реабилитацию.</p>
 <p>Мы не просто выполняем упражнения, а учим тело двигаться иначе: функциональнее и экономнее. Этот навык вы переносите в повседневную жизнь, и самочувствие меняется не только на коврике.</p>
@@ -667,7 +676,7 @@ prep = '''<ol class="prep">
 online_body = f'''<div class="wrap page-head">{cr}<h1>Как проходят онлайн-занятия</h1>
 <p class="lead">Индивидуальные тренировки по видеосвязи из любой точки мира. Я вижу вас, корректирую технику по ходу занятия и выстраиваю практику под ваши цели.</p>
 {pill_prices("online")}
-<div class="actions">{btn_wa()}</div></div>
+{contact_pair()}</div>
 {sec(rows([
  ("Начинаем с базы", "<p>Первые занятия посвящены базовым навыкам: дыханию, простым движениям, умению замедляться, наблюдать за ощущениями и переключать внимание на тело. Это фундамент, на котором строится всё остальное.</p>"),
  ("Тесты и программа под ваши цели", "<p>Если нужно, проводим двигательные тесты: оцениваем состояние мышц и суставов, дыхание. По результатам я выстраиваю практику под ваши задачи. Через некоторое время повторяем тесты, и вы своими глазами видите прогресс.</p>"),
@@ -678,7 +687,7 @@ online_body = f'''<div class="wrap page-head">{cr}<h1>Как проходят о
 ]), "tight")}
 {sec(f'<div class="sec-head" id="podgotovka"><h2>Как подготовиться к онлайн-занятию</h2><p>Чтобы я хорошо видела вашу технику, вовремя подсказывала и давала рекомендации именно вам, подготовьтесь заранее.</p></div>{prep}<div class="prep-note"><p>Моя задача — наблюдать за вами, замечать особенности движений, корректировать технику и давать рекомендации с учётом ваших индивидуальных особенностей. Чем лучше я вас вижу, тем точнее и полезнее наша совместная работа.</p><p>Спасибо за внимательное отношение к практике. До встречи на занятии! 💚</p></div>', "tight")}
 {sec(sec_head("Направления занятий", "Выберите то, что ближе вам: на каждой странице — как строится работа и ответы на вопросы.") + chips(), "tight")}
-{sec(sec_head("Стоимость и запись", lede_html=contact_box()) + '<div class="plans one">' + plan("online", "Онлайн-занятие", "Индивидуально по видеосвязи, из любой точки мира.", ("/batumi/", "Живёте в Батуми? Есть очные занятия")) + "</div>", "tight", "stoimost")}
+{sec(sec_head("Стоимость и запись") + '<div class="plans">' + plan("online", "Онлайн-занятие", "Индивидуально по видеосвязи, из любой точки мира.", ("/batumi/", "Живёте в Батуми? Есть очные занятия")) + book_card() + "</div>", "tight", "stoimost")}
 {sec(sec_head("Частые вопросы") + faq_html(ONLINE_FAQ), "tight")}
 {cta_band("Найдём причину дискомфорта", "Хотите понять, откуда берутся напряжение и дискомфорт в теле и что с ними делать? Напишите в WhatsApp или Telegram: пришлю короткую анкету, и по ней спланируем первое занятие.")}'''
 page("/online/", f"Онлайн-занятия йогатерапией — {prices_text('online')} | {BRAND}",
@@ -701,13 +710,13 @@ batumi_service = {"@type": "Service", "@id": DOMAIN + "/batumi/#service",
 batumi_body = f'''<div class="wrap page-head">{cr}<h1>Индивидуальные занятия йогатерапией в Батуми</h1>
 <p class="lead">Очные персональные тренировки в Батуми — для тех, кто живёт здесь постоянно или приехал на время.</p>
 {pill_prices("batumi")}
-<div class="actions">{btn_wa()}</div></div>
+{contact_pair()}</div>
 {sec(rows([
  ("Формат", "<p>Работаем один на один. Постоянной студии нет, поэтому место и время подбираем вместе, под ваш график.</p>"),
  ("Что происходит на занятии", '<p>Начинаем с вашего запроса и, если нужно, с двигательных тестов. Дальше — практика под ваши цели: йогатерапия, метод Фельденкрайза, миофасциальные и соматические упражнения, работа с дыханием. Принцип тот же, что и онлайн: <a href="/online/">как проходят занятия</a>.</p>'),
  ("Кому подойдёт", f"{chips()}<p>{LEVEL_P1}</p>"),
 ]), "tight")}
-{sec(sec_head("Стоимость и запись", lede_html=contact_box()) + '<div class="plans one">' + plan("batumi", "Очно в Батуми", "Индивидуальное занятие один на один. Место и время подбираем под ваш график.", ("/online/", "Не в Батуми? Есть онлайн-занятия"), dark=True) + "</div>", "tight", "stoimost")}
+{sec(sec_head("Стоимость и запись") + '<div class="plans">' + plan("batumi", "Очно в Батуми", "Индивидуальное занятие один на один. Место и время подбираем под ваш график.", ("/online/", "Не в Батуми? Есть онлайн-занятия"), dark=True) + book_card() + "</div>", "tight", "stoimost")}
 {sec(sec_head("Частые вопросы") + faq_html(BATUMI_FAQ), "tight")}
 {cta_band("Записаться на занятие в Батуми", "Расскажите, что вас беспокоит, и я предложу удобное время и место.")}'''
 page("/batumi/", f"Йогатерапия в Батуми — {prices_text('batumi')} | {AUTHOR}",
@@ -734,7 +743,7 @@ def dir_page(d):
                "availableLanguage": "ru", "url": url, "description": d["desc"],
                "offers": offers("online", "Индивидуальное онлайн-занятие") + offers("batumi", "Индивидуальное занятие в Батуми")}
     body = f'''<div class="wrap page-head dir-head">{cr}
-<div class="dir-in"><div><h1>{e(d["h1"])}</h1><p class="lead">{e(d["lead"])}</p><div class="actions">{contact_row()}</div></div>
+<div class="dir-in"><div><h1>{e(d["h1"])}</h1><p class="lead">{e(d["lead"])}</p>{contact_pair()}</div>
 {price_card(("/online/", "Как проходят занятия"))}</div></div>
 {sec(rows([(d["when_title"], when), ("Как строится работа", f"<p>{e(d['how'])}</p>"), ("Что подтверждает опыт", exp)]), "tight")}
 {sec(f'<div class="note"><h2>Важно знать</h2><p>{e(d["note"])}</p></div>', "tight")}
@@ -831,13 +840,13 @@ page(u, f"{t} | {BRAND}", s,
 {faq_html(ART_FAQ)}
 {author_box}</article>
 <aside class="art-side"><nav class="toc" aria-label="В статье"><h2>В статье</h2><ol>{toc_html}</ol></nav>
-<div class="side-card"><h2>Записаться</h2><p>Расскажите о своём запросе, и я предложу, с чего начать.</p><div class="actions">{contact_row()}</div></div></aside></div>""", "tight")}{cta_band()}''',
+<div class="side-card"><h2>Записаться</h2><p>Расскажите о своём запросе, и я предложу, с чего начать.</p>{contact_pair()}</div></aside></div>""", "tight")}{cta_band()}''',
      graph=[cr_ld, article, faq_node(abs_url(u), ART_FAQ)], og_type="article")
 
 
 # ===================== 404 =====================
 page("/404.html", f"Страница не найдена | {BRAND}", "Страница не найдена.",
-     sec(f'<h1>Страница не найдена</h1><p class="lead" style="margin-top:1.25rem">Проверьте адрес или вернитесь на главную.</p><div class="actions"><a class="btn" href="/">На главную</a></div>'),
+     sec(f'<h1>Страница не найдена</h1><p class="lead" style="margin-top:1.25rem">Проверьте адрес или вернитесь на главную.</p><div class="actions"><a class="btn" href="/">На главную</a></div>{contact_pair()}'),
      indexable=False)
 
 
