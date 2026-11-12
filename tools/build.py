@@ -841,6 +841,34 @@ page("/404.html", f"Страница не найдена | {BRAND}", "Стран
      indexable=False)
 
 
+# ===================== редиректы со старого сайта =====================
+# старый путь -> новый путь. Новые старые адреса из Search Console добавлять сюда.
+REDIRECTS = {
+    "/zanyatiya-jogoj-onlajn/": "/online/",
+    "/joga-dlya-nachinayushhih/": "/",
+}
+for old, new in REDIRECTS.items():
+    dest = abs_url(new)
+    stub = f'''<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Страница переехала | {BRAND}</title>
+<meta http-equiv="refresh" content="0; url={dest}">
+<link rel="canonical" href="{dest}">
+<meta name="robots" content="noindex, follow">
+</head>
+<body>
+<p>Страница переехала: <a href="{dest}">{dest}</a></p>
+</body>
+</html>
+'''
+    target = os.path.join(OUT, old.strip("/"), "index.html")
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "w", encoding="utf-8") as f: f.write(stub)
+
+
 # ===================== технические файлы =====================
 def w(name, text):
     p = os.path.join(OUT, name)
