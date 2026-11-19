@@ -378,3 +378,12 @@ a:hover{text-decoration-color:currentColor}
   .trace .l1,.trace .l2{animation:none;stroke-dashoffset:0}
   .trace circle{animation:none;opacity:.55}
 }
+@media (min-width:40rem){.cert.land{grid-column:span 2}}
+.chips.plain li{padding:.5rem 1.1rem;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:.98rem}
+.lead-p{font-size:1.1rem;color:var(--muted);max-width:42rem}
+.prose h3{max-width:42rem}
+.ticks{list-style:none;margin:1rem 0 1.5rem;padding:0;max-width:42rem}
+.ticks li{position:relative;padding-left:2.2rem;margin:0 0 .85rem}
+.ticks li svg{position:absolute;left:0;top:.2rem;width:1.35rem;height:1.35rem;fill:none;stroke:var(--sea);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.prose .note{max-width:42rem;margin:1.25rem 0 1.5rem}
+.prose .practice-t{margin:2rem 0 .75rem;font-weight:500}
